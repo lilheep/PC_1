@@ -150,7 +150,7 @@ def create_users():
                 "password": hash_password('1234567ty'),
                 "phone": "89532347865",
                 "role_id": 1,
-                "adress": "Кострома"
+                "address": "Кострома"
                 
             },
             {
@@ -159,7 +159,7 @@ def create_users():
                 "password": hash_password('127869jhg'),
                 "phone": "89535671234",
                 "role_id": 2,
-                "adress": "Кострома"
+                "address": "Кострома"
             },
             {
                  "name": "Комаров Кирилл Александрович",
@@ -167,7 +167,7 @@ def create_users():
                 "password": hash_password('111kirillof'),
                 "phone": "89456666567",
                 "role_id": 2,
-                "adress": "Кострома"
+                "address": "Кострома"
             },
             {
                 "name": "Машков Виталий Сергеевич",
@@ -175,7 +175,7 @@ def create_users():
                 "password": hash_password('111vityaf'),
                 "phone": "89932345678",
                 "role_id": 2,
-                "adress": "Ковров"
+                "address": "Ковров"
             },
             {
                 "name": "Комов Егор Павлович",
@@ -183,7 +183,7 @@ def create_users():
                 "password": hash_password('111kehaaagfdhf'),
                 "phone": "89532405628",
                 "role_id": 2,
-                "adress": "Кострома"
+                "address": "Кострома"
             } 
         ]
         for user in users:
