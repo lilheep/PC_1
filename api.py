@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Header
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from fastapi.middleware.cors import CORSMiddleware
 from hashing_password import hash_password, verify_password
 import re
@@ -10,6 +10,7 @@ from models import Roles, Users, PasswordChangeRequest, UserToken, Manufactures,
 from database import db_connection
 from pydantic import BaseModel
 from email_utils import generation_confirmation_code, send_email
+from decimal import Decimal
 
 app = FastAPI()
 
@@ -33,12 +34,13 @@ def get_user_by_token(token: str, required_role: Optional[str] = None) -> Users:
         
         if not user_token:
             raise HTTPException(401, 'Недействительный или просроченный токен.')
-        
+               
         user = user_token.user_id
+        user_role = Roles.get_by_id(user.role_id)
         if required_role:
-            user_role = Roles.get_by_id(user.role_id)
-            if user_role.name != required_role:
-                raise HTTPException(403, 'Недостаточно прав для выполнения этого действия.')
+            if user_role.name != 'Администратор':
+                if user_role.name != required_role:
+                    raise HTTPException(403, 'Недостаточно прав для выполнения этого действия.')
         
         user_token.expires_at = datetime.datetime.now() + datetime.timedelta(hours=1)
         user_token.save()
@@ -49,7 +51,24 @@ def get_user_by_token(token: str, required_role: Optional[str] = None) -> Users:
         raise http_exc
     except Exception as e:
         raise HTTPException(500, f'Ошибка при проверке токена: {e}')
-        
+    
+def get_component_type_by_name(type_name: str):
+    """Получение имени типа компонента"""
+    if not type_name:
+        return None
+    component_type = ComponentsTypes.select().where(ComponentsTypes.name==type_name).first()
+    if not component_type:
+        raise HTTPException(404, f'Тип компонента {type_name} не найден.')
+    return component_type
+
+def get_manufacture_by_name(manufacture_name: str):
+    """Получение названия производителя"""
+    if not manufacture_name:
+        return None
+    manufacture = Manufactures.select().where(Manufactures.name==manufacture_name).first()
+    if not manufacture:
+        raise HTTPException(404, f'Производитель {manufacture_name} не найден.')
+    return manufacture
 
 class AuthRequest(BaseModel):
     email: str | None = None
@@ -60,6 +79,59 @@ class SetRoleRequest(BaseModel):
     email: str | None = None
     phone: str | None = None
     new_role: str
+
+class ComponentsTypesCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+class ComponentsTypesEdit(BaseModel):
+    new_name: str | None = None
+    description: str | None = None
+
+class ComponentCreate(BaseModel):
+    name: str
+    type_name: Optional[str] = None
+    manufacture_name: Optional[str] = None
+    price: float
+    stock_quantity: int
+    specification: List[Dict[str, Any]] = None
+
+class ComponentsEdit(BaseModel):
+    new_name: Optional[str] = None
+    type_name: Optional[str] = None
+    manufacture_name: Optional[str] = None
+    price: Optional[float] = None
+    stock_quantity: Optional[int] = None
+    specification: List[Dict[str, Any]] = None
+    
+class ConfigurationCreate(BaseModel):
+    name_config: Optional[str] = None
+    description: Optional[str] = None
+
+class ConfigurationEdit(BaseModel):
+    name_config: Optional[str] = None
+    description: Optional[str] = None
+
+class ConfigComponentCreate(BaseModel):
+    component_name: str
+    quantity: int = 1
+
+class ConfigComponentEdit(BaseModel):
+    quantity: int
+
+class OrderCreate(BaseModel):
+    configuration_id: int
+    quantity: int = 1
+
+class OrderStatusUpdate(BaseModel):
+    status_id: int
+
+class OrderConfigCreate(BaseModel):
+    configuration_id: int
+    quantity: int = 1
+
+class OrderConfigUpdate(BaseModel):
+    quantity: int
     
 @app.post('/users/register/', tags=['Users'])
 async def create_user(email: str, password: str, full_name: str, number_phone: str, address: str):
@@ -269,5 +341,1203 @@ async def set_role_user(data: SetRoleRequest, token: str = Header(...)):
     
     except Exception as e:
         raise HTTPException(500, f'Ошибка при изменении роли пользователя: {e}')
+
+@app.post('/manufactures/add_manufacture/', tags=['Manufactures'])
+async def create_manufactrue(name: str, token: str = Header(...)):
+    """Создание производетеля"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        Manufactures.create(name=name)
+        return {'message': 'Производитель успешно создан.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при создании производителя: {e}') 
+
+@app.put('/manufactures/edit_manufactures/', tags=['Manufactures'])
+async def edit_manufactures(manufacture_id: int, new_name: str, token: str = Header(...)):
+    """Изменение названия производителя"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    manufacture = Manufactures.select().where(Manufactures.id==manufacture_id).first()
+    if not manufacture:
+        raise HTTPException(404, 'Производителя с указанным ID не существует.')
+    
+    try:
+        manufacture.name = new_name
+        manufacture.save()
+        return {'message': 'Название производителя успешно изменено.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при изменении названия производителя: {e}') 
+
+@app.get('/manufactures/get_manufactures_by_id/', tags=['Manufactures'])
+async def get_manufacture_by_id(manufacture_id: int, token: str = Header(...)):
+    """Получение данных о конкретном производителе"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    try:
+        manufacture = Manufactures.select().where(Manufactures.id==manufacture_id).first()
+        if not manufacture:
+            raise HTTPException(404, 'Производителя с указанным ID не существует.')      
         
+        return {
+            'id': manufacture.id,
+            'name': manufacture.name
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении данных о производителе: {e}')
+
+@app.get('/manufactures/get_manufactures/', tags=['Manufactures'])
+async def get_all_manufactures(token: str = Header(...)):
+    """Получении данных о всех производителях"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    try:
+        manufactures = Manufactures.select()
+
+        return [{
+            'name': manufacture.name
+        } for manufacture in manufactures]
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении данных о производителях: {e}')
+
+@app.delete('/manufactures/del_manufacture_by_id/', tags=['Manufactures'])
+async def delete_manufacture(manufacture_id: int, token: str = Header(...)):
+    """Удаление выбранного производителя"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        manufacture = Manufactures.select().where(Manufactures.id==manufacture_id).first()
+        if not manufacture:
+            raise HTTPException(404, 'Производитель с указанным ID не существует.')
+        manufacture.delete_instance() 
+        return {'message': f'Прозводитель {manufacture.name} успешно удален.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при удалении производителя: {e}')
         
+@app.get('/components_types/get_all/', tags=['Components Types'])
+async def get_all_cp(token: str = Header(...)):
+    """Получение данных о всех типах компонентов"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        component_types = ComponentsTypes.select()
+        return [{
+            'name': component_type.name,
+            'description': component_type.description
+        } for component_type in component_types]
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении типов компонентов: {e}')
+
+@app.get('/components_types/get_by_id/', tags=['Components Types'])
+async def get_cp_by_id(cp_id: int, token: str = Header(...)):
+    """Получение данных о выбранном типе компонента"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+
+    try:
+        component_types = ComponentsTypes.select().where(ComponentsTypes.id==cp_id).first()
+        if not component_types:
+            raise HTTPException(404, 'Тип компонента с указанным ID не найден.')
+
+        return {
+            'id': component_types.id,
+            'name': component_types.name,
+            'description': component_types.description
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении типа компонента: {e}')
+
+@app.post('/components_types/create_cp/', tags=['Components Types'])
+async def create_cp(data: ComponentsTypesCreate, token: str = Header(...)):
+    """Создание типа компонента"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    name = data.name
+    description = data.description
+    
+    try:
+        component_types = ComponentsTypes.select().where(ComponentsTypes.name==name).first()
+        if component_types:
+            raise HTTPException(403, 'Тип компонента с таким названием уже существует.')
+        
+        ComponentsTypes.create(
+            name=name,
+            description=description
+        )
+        
+        return {'message': 'Тип компонента успешно создан.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при создании типа компонента: {e}')
+
+@app.put('/components_types/edit_cp_by_id/', tags=['Components Types'])
+async def edit_cp(cp_id: int, data: ComponentsTypesEdit, token: str = Header(...)):
+    """Изменение данных о типе компонента"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+
+    new_name = data.new_name
+    description = data.description
+    component_type = ComponentsTypes.select().where(ComponentsTypes.id==cp_id).first()
+    if not component_type:
+        raise HTTPException(404, 'Тип компонента с указанным ID не найден.')
+    try:
+        component_type.name = new_name
+        component_type.description = description
+        component_type.save()
+        return {'message': 'Данные о типе компонента успешно изменены.'}
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при изменении типа компонента: {e}')
+    
+@app.delete('/components_types/delete_cp_by_id/', tags=['Components Types'])
+async def delete_cp(cp_id: int, token: str = Header(...)):
+    """Удаление типа компонента"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        component_type = ComponentsTypes.select().where(ComponentsTypes.id==cp_id).first()
+        if not component_type:
+            raise HTTPException(404, 'Тип компонента с указанным ID не найден.')
+        
+        component_type.delete_instance()
+        return {'message': f'Тип компонента {component_type.name} успешно удален.'}
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при удалении типа компонента: {e}')    
+    
+@app.get('/components/get_all/', tags=['Components'])
+async def get_all_components(token: str = Header(...)):
+    """Получение данных о всех компонентах"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+
+    try:
+        components = Components.select()
+        
+        return [{
+            'name': c.name,
+            'type_name': c.type_id.name if c.type_id else None,
+            'manufacture_name': c.manufactures_id.name if c.manufactures_id else None,
+            'price': float(c.price),
+            'stock_quantity': c.stock_quantity,
+            'specification': c.specification
+        } for c in components]
+        
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении компонентов: {e}')
+
+@app.get('/components/get_by_id/', tags=['Components'])
+async def get_component_by_id(component_id: int, token: str = Header(...)):
+    """Получение данных о выбранном компоненте"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        component = Components.select().where(Components.id==component_id).first()
+        if not component:
+            raise HTTPException(404, 'Компонент с указанным ID не найден.')
+
+        return {
+            'name': component.name,
+            'type_name': component.type_id.name if component.type_id else None,
+            'manufacture_name': component.manufactures_id.name if component.manufactures_id else None,
+            'price': float(component.price),
+            'stock_quantity': component.stock_quantity,
+            'specification': component.specification
+        }
+        
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении компонента: {e}')
+
+@app.post('/components/create/', tags=['Components'])
+async def create_component(data: ComponentCreate, token: str = Header(...)):
+    """Создание компонента"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        existing_component = Components.select().where(Components.name==data.name).first()
+        if existing_component:
+            raise HTTPException(403, f'Компонент {existing_component.name} уже существует.')
+        
+        component_type = get_component_type_by_name(data.type_name) if data.type_name else None
+        manufacture = get_manufacture_by_name(data.manufacture_name) if data.manufacture_name else None
+        
+        Components.create(
+            name=data.name,
+            type_id=component_type.id if component_type else None,
+            manufactures_id=manufacture.id if manufacture else None,
+            price=data.price,
+            stock_quantity=data.stock_quantity,
+            specification=data.specification
+        )
+        
+        return {'message': 'Компонент успешно создан.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при создании компонента: {e}')
+
+@app.put('/components/edit_by_id/', tags=['Components'])
+async def edit_component(component_id: int, data: ComponentsEdit, token: str = Header(...)):
+    """Изменение данных о компоненте"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+
+    try:
+        component = Components.select().where(Components.id==component_id).first()
+        if not component:
+            raise HTTPException(404, 'Компонент с указанным ID не существует.')
+        
+        if data.new_name and data.new_name != component.name:
+            existing_component = Components.select().where(Components.name==data.new_name).first()
+            if existing_component:
+                raise HTTPException(403, f'Компонент {existing_component.name} уже существует.')
+        
+        component_type = None
+        if data.type_name is not None:
+            component_type = get_component_type_by_name(data.type_name) if data.type_name else None
+        
+        manufacture = None
+        if data.manufacture_name is not None:
+            manufacture = get_manufacture_by_name(data.manufacture_name) if data.manufacture_name else None
+        
+        if data.new_name is not None:
+            component.name = data.new_name
+        if data.type_name is not None:
+            component.type_id = component_type.id if component_type else None
+        if data.manufacture_name is not None:
+            component.manufactures_id = manufacture.id if manufacture else None
+        if data.price is not None:
+            component.price = data.price
+        if data.stock_quantity is not None:
+            component.stock_quantity = data.stock_quantity
+        if data.specification is not None:
+            component.specification = data.specification
+        
+        component.save()
+        
+        return {'message': 'Данные о компоненте успешно изменены.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при изменении компонента: {e}')
+
+@app.delete('/components/delete_by_id/', tags=['Components'])
+async def delete_component(component_id: int, token: str = Header(...)):
+    """Удаление компонента"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        component = Components.select().where(Components.id==component_id).first()
+        if not component:
+            raise HTTPException(404, 'Компонент с указанным ID не найден.')
+        
+        component_name = component.name
+        component.delete_instance()
+        
+        return {'message': f'Компонент {component_name} успешно удален.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при удалении компонента: {e}')
+
+@app.get('/configurations/get_all/', tags=['Configurations'])
+async def get_all_configurations(token: str = Header(...)):
+    """Получение всех конфигураций текущего пользователя"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        configurations = Configurations.select().where(Configurations.user_id==current_user.id)
+        return [{
+            'id': config.id,
+            'name_config': config.name_config,
+            'description': config.description,
+            'created_at': config.created_at.isoformat() if config.created_at else None
+        } for config in configurations]
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении конфигураций: {e}')
+    
+@app.get('/configurations/get_by_id/', tags=['Configurations'])
+async def get_configuration_by_id(config_id: int, token: str = Header(...)):
+    """Получение конкретной конфигурации"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+
+    try:
+        configuration = Configurations.select().where(
+            (Configurations.id==config_id) & 
+            (Configurations.user_id==current_user.id)
+        ).first()
+        
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация с указанным ID не найдена или у Вас нет доступа к ней.')
+
+        return {
+            'id': configuration.id,
+            'name_config': configuration.name_config,
+            'description': configuration.description,
+            'created_at': configuration.created_at.isoformat() if configuration.created_at else None
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении конфигурации: {e}')
+
+@app.post('/configurations/create/', tags=['Configurations'])
+async def create_configuration(data: ConfigurationCreate, token: str = Header(...)):
+    """Создание новой конфигурации"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        if data.name_config:
+            existing_config = Configurations.select().where(
+                (Configurations.user_id==current_user.id) &
+                (Configurations.name_config==data.name_config)
+            ).first()
+            if existing_config:
+                raise HTTPException(403, f'Конфигурация {existing_config.name_config} уже существует.')
+        
+        Configurations.create(
+            user_id=current_user.id,
+            name_config=data.name_config,
+            description=data.description
+        )
+        
+        return {'message': 'Конфигурация успешно создана.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при создании конфигурации: {e}')
+
+@app.put('/configurations/edit_by_id/', tags=['Configurations'])
+async def edit_configuration(config_id: int, data: ConfigurationEdit, token: str = Header(...)):
+    """Изменение конфигурации"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+
+    try:
+        configuration = Configurations.select().where(
+            (Configurations.id==config_id) &
+            (Configurations.user_id==current_user.id)
+        ).first()
+       
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация с указанным ID не найдена, или у Вас нет прав на ее изменение.')
+       
+        if data.name_config and data.name_config != configuration.name_config:
+            existing_config = Configurations.select().where(
+                (Configurations.name_config==data.name_config) &
+                (Configurations.user_id==current_user.id)).first()
+            if existing_config:
+                raise HTTPException(403, f'Конфигурация {existing_config.name_config} уже существует.')
+        
+        if data.name_config is not None:
+            configuration.name_config = data.name_config
+        
+        if data.description is not None:
+            configuration.description = data.description
+        
+        configuration.save()
+        
+        return {'message': 'Конфигурация успешно изменена.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при изменении конфигурации: {e}')
+
+@app.delete('/configurations/delete_by_id/', tags=['Configurations'])
+async def delete_configuration(config_id: int, token: str = Header(...)):
+    """Удаление конфигурации"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        configuration = Configurations.select().where(
+            (Configurations.user_id==current_user.id) &
+            (Configurations.id==config_id)
+        ).first()
+        
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация с указанным ID не найдена, или у Вас нет прав на ее удаление.')
+        
+        config_name = configuration.name_config
+        configuration.delete_instance()
+        return {'message': f'Конфигурация {config_name} успешно удалена.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при удалении конфигурации: {e}')
+
+@app.get('/configurations/admin/get_all/', tags=['Configurations'])
+async def admin_get_all_configurations(token: str = Header(...)):
+    """Получение всех конфигураций (только для администратора)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        configurations = Configurations.select()
+        return [{
+            'id': config.id,
+            'user_id': config.user_id.id,
+            'user_name': config.user_id.email,
+            'name_config': config.name_config,
+            'description': config.description,
+            'created_at': config.created_at.isoformat() if config.created_at else None
+        } for config in configurations]
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении конфигураций: {e}')
+
+@app.delete('/configurations/admin/delete_by_id/', tags=['Configurations'])
+async def admin_delete_configuration(config_id: int, token: str = Header(...)):
+    """Удаление любой конфигурации (только для администратора)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        configuration = Configurations.select().where(Configurations.id==config_id).first()
+        
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация с указанным ID не найдена.')
+        
+        config_name = configuration.name_config or f"Конфигурация #{configuration.id}"
+        user_name = configuration.user_id.email
+        
+        configuration.delete_instance()
+        
+        return {
+            'message': f'Конфигурация {config_name} пользователя {user_name} успешно удалена.',
+            'deleted_config_id': config_id,
+            'user_login': user_name
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при удалении конфигурации: {e}')
+
+@app.get('/configurations/admin/get_by_id/', tags=['Configurations'])
+async def admin_get_configuration_by_id(config_id: int, token: str = Header(...)):
+    """Получение любой конфигурации по ID (только для администратора)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+
+    try:
+        configuration = Configurations.select().where(Configurations.id==config_id).first()
+        
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация с указанным ID не найдена.')
+
+        return {
+            'id': configuration.id,
+            'user_id': configuration.user_id.id,
+            'user_login': configuration.user_id.email,
+            'name_config': configuration.name_config,
+            'description': configuration.description,
+            'created_at': configuration.created_at.isoformat() if configuration.created_at else None
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении конфигурации: {e}')
+
+@app.get('/configurations/{config_id}/components/', tags=['Configurations Components'])
+async def get_configuration_components(config_id: int, token: str = Header(...)):
+    """Получение всех компонентов конфигурации"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        configuration = Configurations.select().where(
+            (Configurations.id==config_id) & 
+            (Configurations.user_id==current_user.id)
+        ).first()
+        
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация не найдена или у вас нет к ней доступа.')
+        
+        config_components = ConfigurationsComponents.select().where(
+            ConfigurationsComponents.configuration_id==config_id
+        )
+        
+        return [{
+            'id': cc.id,
+            'component_id': cc.components_id.id,
+            'component_name': cc.components_id.name,
+            'type_name': cc.components_id.type_id.name if cc.components_id.type_id else None,
+            'manufacture_name': cc.components_id.manufactures_id.name if cc.components_id.manufactures_id else None,
+            'price': float(cc.components_id.price),
+            'quantity': cc.quantity,
+            'total_price': float(cc.components_id.price * cc.quantity)
+        } for cc in config_components]
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении компонентов конфигурации: {e}')      
+
+@app.post('/configurations/{config_id}/components/', tags=['Configurations Components'])
+async def add_component_to_configuration(
+    config_id: int, 
+    data: ConfigComponentCreate, 
+    token: str = Header(...)
+):
+    """Добавление компонента в конфигурацию"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        configuration = Configurations.select().where(
+            (Configurations.id==config_id) & 
+            (Configurations.user_id==current_user.id)
+        ).first()
+        
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация не найдена или у вас нет к ней доступа.')
+
+        component = Components.select().where(Components.name==data.component_name).first()
+        if not component:
+            raise HTTPException(404, f'Компонент "{data.component_name}" не найден.')
+
+        existing_component = ConfigurationsComponents.select().where(
+            (ConfigurationsComponents.configuration_id==config_id) &
+            (ConfigurationsComponents.components_id==component.id)
+        ).first()
+        
+        if existing_component:
+            raise HTTPException(400, 'Этот компонент уже есть в конфигурации.')
+
+        ConfigurationsComponents.create(
+            configuration_id=config_id,
+            components_id=component.id,
+            quantity=data.quantity
+        )
+        
+        return {'message': f'Компонент "{data.component_name}" успешно добавлен в конфигурацию.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при добавлении компонента: {e}')
+
+@app.put('/configurations/{config_id}/components/{component_id}/', tags=['Configurations Components'])
+async def update_configuration_component(
+    config_id: int, 
+    component_id: int, 
+    data: ConfigComponentEdit, 
+    token: str = Header(...)
+):
+    """Изменение количества компонентов в конфигурации"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    try:
+        config = Configurations.select().where(
+            (Configurations.id==config_id) &
+            (Configurations.user_id==current_user.id)
+        ).first()
+        
+        if not config:
+            raise HTTPException(404, 'Конфигурация не найдена, или у вас нет доступа к ней.')
+        
+        config_component = ConfigurationsComponents.select().where(
+            (ConfigurationsComponents.configuration_id==config_id) &
+            (ConfigurationsComponents.id==component_id)
+        ).first()
+        if not config_component:
+            raise HTTPException(404, 'Компонент не найден в данной конфигурации.')
+        
+        config_component.quantity = data.quantity
+        config_component.save()
+        
+        return {'message': 'Количество компонента успешно изменено.'}
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Не удалось изменить количество компонента в конфигурации: {e}')
+
+@app.delete('/configurations/{config_id}/components/{component_id}/', tags=['Configurations Components'])
+async def delete_component_in_configuration(
+    config_id: int,
+    component_id: int,
+    token: str = Header(...)
+    ):
+    """Удаление компонента из конфигурации"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        configuration = Configurations.select().where(
+            (Configurations.id==config_id) &
+            (Configurations.user_id==current_user.id)
+        ).first()
+        
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация не найдена, или у вас нет доступа к ней.')
+        
+        config_component = ConfigurationsComponents.select().where(
+            (ConfigurationsComponents.configuration_id==config_id) &
+            (ConfigurationsComponents.id==component_id)
+        ).first()
+        if not config_component:
+            raise HTTPException(404, 'Компонент не найден в данной конфигурации.')
+        
+        component_name = config_component.components_id.name
+        config_component.delete_instance()
+        
+        return {'message': f'Компонент {component_name} успешно удален.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Не удалось удалить компонент из конфигурации: {e}')
+
+@app.get('/configurations/admin/{config_id}/components/', tags=['Configurations Components'])
+async def admin_get_configuration_components(config_id: int, token: str = Header(...)):
+    """Получение компонентов любой конфигурации (для администратора)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        config = Configurations.select().where(Configurations.id==config_id).first()
+        if not config:
+            raise HTTPException(404, 'Не удалось найти конфигурацию.')
+        configuration_components = ConfigurationsComponents.select().where(ConfigurationsComponents.configuration_id==config_id)
+        
+        return [
+            {
+                'id': cc.id,
+                'component_id': cc.components_id.id,
+                'component_name': cc.components_id.name,
+                'type_name': cc.components_id.type_id.name if cc.components_id.type_id else None,
+                'manufacture_name': cc.components_id.manufactures_id.name if cc.components_id.manufactures_id else None,
+                'price': float(cc.components_id.price),
+                'quantity': cc.quantity,
+                'total_price': float(cc.components_id.price * cc.quantity)
+            } for cc in configuration_components]
+        
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении компонентов конфигурации: {e}') 
+
+@app.delete('/configurations/admin/{config_id}/components/{component_id}/', tags=['Configurations Components'])
+async def admin_remove_component_from_configuration(
+    config_id: int, 
+    component_id: int, 
+    token: str = Header(...)
+):
+    """Удаление компонента из любой конфигурации (для администратора)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        config_component = ConfigurationsComponents.select().where(
+            (ConfigurationsComponents.id==component_id) &
+            (ConfigurationsComponents.configuration_id==config_id)
+        ).first()
+        
+        if not config_component:
+            raise HTTPException(404, 'Связь компонента с конфигурацией не найдена.')
+        
+        component_name = config_component.components_id.name
+        user_login = config_component.configuration_id.user_id.email
+        
+        config_component.delete_instance()
+        
+        return {
+            'message': f'Компонент "{component_name}" успешно удален из конфигурации пользователя {user_login}.',
+            'deleted_component_id': component_id,
+            'user_login': user_login
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при удалении компонента: {e}')
+
+@app.get('/order_status/get_all/', tags=['Orders Statuses'])
+async def get_all_statuses(token: str = Header(...)):
+    """Получение всех статусов заказа"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        statuses = OrdersStatus.select()
+        return [{
+            'id': status.id,
+            'name': status.name
+        } for status in statuses]
+        
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении статусов заказов: {e}')
+
+@app.post('/order_status/create_status/', tags=['Orders Statuses'])
+async def create_order_status(name: str, token: str = Header(...)):
+    """Создание нового статуса заказа (только для администратора)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        existing_status = OrdersStatus.select().where(OrdersStatus.name==name).first()
+        if existing_status:
+            raise HTTPException(400, 'Статус с таким названием уже существует.')
+        OrdersStatus.create(name=name)
+        return {'message': 'Статус заказа успешно создан.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при создании статуса заказа: {e}')       
+
+@app.put('/status_order/edit_status', tags=['Orders Statuses'])
+async def edit_order_status(id: int, new_name: str, token: str = Header(...)):
+    """Изменение статуса заказа"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        status = OrdersStatus.select().where(OrdersStatus.id==id).first()
+        if not status:
+            raise HTTPException(404, 'Статус заказа с указанным ID не найден.')
+        existing_status = OrdersStatus.select().where(OrdersStatus.name==new_name).first()
+        if existing_status:
+            raise HTTPException(403, f'Статус с заказа {existing_status.name} уже существует.')
+        status.name = new_name
+        status.save()
+        return {'message': 'Статус заказа успешно изменен.'}
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при изменении статуса заказа: {e}') 
+
+@app.delete('/status_order/delete_status', tags=['Orders Statuses'])
+async def delete_order_status(id: int, token: str = Header(...)):
+    """Удаление статуса заказа"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.') 
+    try:
+        status = OrdersStatus.select().where(OrdersStatus.id==id).first()
+        if not status:
+            raise HTTPException(404, 'Статус заказа с указанным ID не найден.')
+        
+        status.delete_instance()
+        return {'message': 'Статус заказа успешно удален.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при изменении статуса заказа: {e}') 
+
+@app.get('/orders/get_user_orders/', tags=['Orders'])
+async def get_user_orders(token: str = Header(...)):
+    """Получение заказов текущего пользователя"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        orders = Orders.select().where(Orders.user_id==current_user.id)
+        
+        result = []
+        for order in orders:
+            order_configs = OrderConfigurations.select().where(
+                OrderConfigurations.order_id==order.id
+            )
+            
+            configs_list = []
+            for oc in order_configs:
+                configs_list.append({
+                    'configuration_id': oc.configuration_id.id,
+                    'configuration_name': oc.configuration_id.name_config,
+                    'quantity': oc.quantity,
+                    'price_at_time': float(oc.price_at_time)
+                })
+            
+            result.append({
+                'id': order.id,
+                'order_date': order.order_date.isoformat(),
+                'total_amount': float(order.total_amout),
+                'status_id': order.status_id.id,
+                'status_name': order.status_id.name,
+                'configurations': configs_list
+            })
+        
+        return result
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении заказов: {e}')
+
+@app.get('/orders/get_order_by_id/', tags=['Orders'])
+async def get_order_detail(order_id: int, token: str = Header(...)):
+    """Получение деталей заказа"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        order = Orders.select().where(
+            (Orders.id==order_id) & 
+            (Orders.user_id==current_user.id)
+        ).first()
+        
+        if not order:
+            raise HTTPException(404, 'Заказ не найден или у вас нет к нему доступа.')
+
+        order_configs = OrderConfigurations.select().where(
+            OrderConfigurations.order_id==order.id
+        )
+        
+        configs_list = []
+        for oc in order_configs:
+            configs_list.append({
+                'configuration_id': oc.configuration_id.id,
+                'configuration_name': oc.configuration_id.name_config,
+                'quantity': oc.quantity,
+                'price_at_time': float(oc.price_at_time),
+                'total': float(oc.price_at_time * oc.quantity)
+            })
+        
+        return {
+            'id': order.id,
+            'order_date': order.order_date.isoformat(),
+            'total_amount': float(order.total_amout),
+            'status_id': order.status_id.id,
+            'status_name': order.status_id.name,
+            'configurations': configs_list
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении заказа: {e}')
+
+@app.post('/orders/create_order/', tags=['Orders'])
+async def create_order(data: OrderCreate, token: str = Header(...)):
+    """Создание нового заказа"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        configuration = Configurations.select().where(
+            (Configurations.id==data.configuration_id) &
+            (Configurations.user_id==current_user.id)
+        ).first()
+        
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация не найдена или у вас нет к ней доступа.')
+
+        config_components = ConfigurationsComponents.select().where(
+            ConfigurationsComponents.configuration_id==data.configuration_id
+        )
+        
+        if not config_components:
+            raise HTTPException(400, 'Конфигурация пустая. Добавьте компоненты перед созданием заказа.')
+        
+        total_amount = Decimal('0')
+        for cc in config_components:
+            total_amount += cc.components_id.price * cc.quantity
+        
+        total_amount *= data.quantity
+
+        status = OrdersStatus.get_or_none(OrdersStatus.name=='В обработке')
+        if not status:
+            status = OrdersStatus.select().first()
+            if not status:
+                raise HTTPException(500, 'Не найден статус заказа.')
+
+        order = Orders.create(
+            user_id=current_user.id,
+            total_amout=total_amount,
+            status_id=status.id
+        )
+
+        OrderConfigurations.create(
+            order_id=order.id,
+            configuration_id=data.configuration_id,
+            quantity=data.quantity,
+            price_at_time=total_amount / data.quantity
+        )
+        
+        return {
+            'message': 'Заказ успешно создан.',
+            'order_id': order.id,
+            'total_amount': float(total_amount)
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при создании заказа: {e}')
+
+@app.delete('/orders/cancel_order/', tags=['Orders'])
+async def cancel_order(order_id: int, token: str = Header(...)):
+    """Отмена заказа пользователем"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        order = Orders.select().where(
+            (Orders.id==order_id) & 
+            (Orders.user_id==current_user.id)
+        ).first()
+        
+        if not order:
+            raise HTTPException(404, 'Заказ не найден или у вас нет к нему доступа.')
+
+        order_name = order.id
+        order.delete_instance()
+        
+        return {'message': f'Заказ {order_name} успешно отменен.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при отмене заказа: {e}')
+
+@app.get('/orders/admin/get_all', tags=['Orders'])
+async def admin_get_all_orders(token: str = Header(...)):
+    """Получение всех заказов (админ)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        orders = Orders.select()
+        
+        result = []
+        for order in orders:
+            order_configs = OrderConfigurations.select().where(
+                OrderConfigurations.order_id==order.id
+            )
+            
+            configs_list = []
+            for oc in order_configs:
+                configs_list.append({
+                    'configuration_id': oc.configuration_id.id,
+                    'configuration_name': oc.configuration_id.name_config,
+                    'quantity': oc.quantity,
+                    'price_at_time': float(oc.price_at_time)
+                })
+            
+            result.append({
+                'id': order.id,
+                'user_id': order.user_id.id,
+                'user_login': order.user_id.login,
+                'order_date': order.order_date.isoformat(),
+                'total_amount': float(order.total_amout),
+                'status_id': order.status_id.id,
+                'status_name': order.status_id.name,
+                'configurations': configs_list
+            })
+        
+        return result
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении заказов: {e}')
+
+@app.put('/orders/admin/edit_order_status/', tags=['Orders'])
+async def admin_update_order_status(order_id: int, data: OrderStatusUpdate, token: str = Header(...)):
+    """Изменение статуса заказа (админ)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        order = Orders.select().where(Orders.id==order_id).first()
+        if not order:
+            raise HTTPException(404, 'Заказ не найден.')
+        
+        status = OrdersStatus.get_or_none(OrdersStatus.id==data.status_id)
+        if not status:
+            raise HTTPException(404, 'Статус с указанным ID не найден.')
+        
+        order.status_id = data.status_id
+        order.save()
+        
+        return {
+            'message': f'Статус заказа #{order_id} изменен на "{status.name}".',
+            'order_id': order_id,
+            'new_status': status.name
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при изменении статуса заказа: {e}')
+
+@app.delete('/orders/admin/delete_order/', tags=['Orders'])
+async def admin_delete_order(order_id: int, token: str = Header(...)):
+    """Удаление заказа администратором"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        order = Orders.select().where(Orders.id==order_id).first()
+        
+        if not order:
+            raise HTTPException(404, 'Заказ не найден.')
+
+        user_login = order.user_id.email
+        order_name = order.id
+
+        order.delete_instance()
+        
+        return {
+            'message': f'Заказ {order_name} пользователя {user_login} успешно удален.',
+            'deleted_order_id': order_id,
+            'user_login': user_login
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при удалении заказа: {e}')
+
+@app.get('/order_configurations/get_user_order_config/', tags=['Order Configurations'])
+async def get_order_configurations(order_id: int, token: str = Header(...)):
+    """Получение конфигураций заказа"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        order = Orders.select().where(
+            (Orders.id==order_id) & 
+            (Orders.user_id==current_user.id)
+        ).first()
+        
+        if not order:
+            raise HTTPException(404, 'Заказ не найден или у вас нет к нему доступа.')
+        
+        order_configs = OrderConfigurations.select().where(
+            OrderConfigurations.order_id==order_id
+        )
+        
+        result = []
+        for oc in order_configs:
+            result.append({
+                'id': oc.id,
+                'configuration_id': oc.configuration_id.id,
+                'configuration_name': oc.configuration_id.name_config,
+                'quantity': oc.quantity,
+                'price_at_time': float(oc.price_at_time),
+                'total': float(oc.price_at_time * oc.quantity)
+            })
+        
+        return result
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении конфигураций заказа: {e}')
+
+
+    
