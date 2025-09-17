@@ -5,3 +5,4 @@ uvicorn
 cryptography
 dotenv
 bcrypt
+requests
