@@ -565,6 +565,7 @@ async def get_all_components(token: str = Header(...)):
         components = Components.select()
         
         return [{
+            'id': c.id,
             'name': c.name,
             'type_name': c.type_id.name if c.type_id else None,
             'manufacture_name': c.manufactures_id.name if c.manufactures_id else None,
@@ -1426,7 +1427,7 @@ async def admin_get_all_orders(token: str = Header(...)):
             result.append({
                 'id': order.id,
                 'user_id': order.user_id.id,
-                'user_login': order.user_id.login,
+                'user_login': order.user_id.email,
                 'order_date': order.order_date.isoformat(),
                 'total_amount': float(order.total_amout),
                 'status_id': order.status_id.id,
@@ -1538,6 +1539,188 @@ async def get_order_configurations(order_id: int, token: str = Header(...)):
         raise http_exc
     except Exception as e:
         raise HTTPException(500, f'Ошибка при получении конфигураций заказа: {e}')
+    
+@app.post('/order_configurations/admin/create_config_in_order/', tags=['Order Configurations'])
+async def add_configuration_to_order(
+    order_id: int, 
+    data: OrderConfigCreate, 
+    token: str = Header(...)
+):
+    """Добавление конфигурации в заказ (админ)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        order = Orders.select().where(Orders.id == order_id).first()
+        if not order:
+            raise HTTPException(404, 'Заказ не найден.')
+
+        configuration = Configurations.select().where(
+            Configurations.id == data.configuration_id
+        ).first()
+        
+        if not configuration:
+            raise HTTPException(404, 'Конфигурация не найдена.')
+
+        existing_config = OrderConfigurations.select().where(
+            (OrderConfigurations.order_id == order_id) &
+            (OrderConfigurations.configuration_id == data.configuration_id)
+        ).first()
+        
+        if existing_config:
+            raise HTTPException(400, 'Эта конфигурация уже есть в заказе.')
+
+        config_components = ConfigurationsComponents.select().where(
+            ConfigurationsComponents.configuration_id == data.configuration_id
+        )
+        
+        if not config_components:
+            raise HTTPException(400, 'Конфигурация пустая.')
+        
+        config_price = Decimal('0')
+        for cc in config_components:
+            config_price += cc.components_id.price * cc.quantity
+   
+        order_config = OrderConfigurations.create(
+            order_id=order_id,
+            configuration_id=data.configuration_id,
+            quantity=data.quantity,
+            price_at_time=config_price
+        )
+
+        order.total_amout += config_price * data.quantity
+        order.save()
+        
+        return {
+            'message': 'Конфигурация успешно добавлена в заказ.',
+            'order_config_id': order_config.id,
+            'added_price': float(config_price * data.quantity)
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при добавлении конфигурации в заказ: {e}')
+
+@app.put('/order_configurations/admin/edit_order_config/', tags=['Order Configurations'])
+async def update_order_configuration(
+    config_id: int, 
+    data: OrderConfigUpdate, 
+    token: str = Header(...)
+):
+    """Изменение количества конфигурации в заказе (админ)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        order_config = OrderConfigurations.select().where(
+            OrderConfigurations.id == config_id
+        ).first()
+
+        if not order_config:
+            raise HTTPException(404, 'Конфигурация заказа не найдена.')
+
+        order = Orders.select().where(Orders.id == order_config.order_id.id).first()
+        if not order:
+            raise HTTPException(404, 'Заказ не найден.')
+
+        old_total = order_config.price_at_time * order_config.quantity
+        order_config.quantity = data.quantity
+        order_config.save()
+        new_total = order_config.price_at_time * data.quantity
+        order.total_amout = order.total_amout - old_total + new_total
+        order.save()
+        
+        return {
+            'message': 'Количество конфигурации в заказе успешно изменено.',
+            'order_config_id': config_id,
+            'old_quantity': order_config.quantity,
+            'new_quantity': data.quantity,
+            'price_change': float(new_total - old_total)
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при изменении конфигурации заказа: {e}')
+
+@app.delete('/order_configurations/admin/delete_order_config/', tags=['Order Configurations'])
+async def remove_configuration_from_order(config_id: int, token: str = Header(...)):
+    """Удаление конфигурации из заказа (админ)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+
+        order_config = OrderConfigurations.select().where(
+            OrderConfigurations.id == config_id
+        ).first()
+        
+        if not order_config:
+            raise HTTPException(404, 'Конфигурация заказа не найдена.')
+
+        order = Orders.select().where(Orders.id == order_config.order_id.id).first()
+        if not order:
+            raise HTTPException(404, 'Заказ не найден.')
+
+        config_total = order_config.price_at_time * order_config.quantity
+        config_name = order_config.configuration_id.name_config
+        order_config.delete_instance()
+        order.total_amout -= config_total
+        order.save()
+        
+        return {
+            'message': f'Конфигурация "{config_name}" успешно удалена из заказа.',
+            'removed_config_id': config_id,
+            'removed_amount': float(config_total)
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при удалении конфигурации из заказа: {e}')
+
+@app.get('/order_configurations/admin/get_all/', tags=['Order Configurations'])
+async def admin_get_all_order_configurations(token: str = Header(...)):
+    """Получение всех связей заказов и конфигураций (админ)"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+        raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        order_configs = OrderConfigurations.select()
+        
+        result = []
+        for oc in order_configs:
+            result.append({
+                'id': oc.id,
+                'order_id': oc.order_id.id,
+                'order_user_id': oc.order_id.user_id.id,
+                'order_user_login': oc.order_id.user_id.email,
+                'order_date': oc.order_id.order_date.isoformat(),
+                'order_total': float(oc.order_id.total_amout),
+                'order_status': oc.order_id.status_id.name,
+                'configuration_id': oc.configuration_id.id,
+                'configuration_name': oc.configuration_id.name_config,
+                'configuration_user_id': oc.configuration_id.user_id.id,
+                'configuration_user_login': oc.configuration_id.user_id.email,
+                'quantity': oc.quantity,
+                'price_at_time': float(oc.price_at_time),
+                'total': float(oc.price_at_time * oc.quantity)
+            })
+        
+        return {
+            'total_count': len(result),
+            'order_configurations': result
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при получении связей заказов и конфигураций: {e}')
 
 
     

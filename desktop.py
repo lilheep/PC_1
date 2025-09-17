@@ -4,13 +4,153 @@ from tkinter.font import Font
 import requests
 import os
 import re
+import json
 
-# os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
-# os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
+os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
+os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
 
 class MainApp:
-    pass
-
+    def __init__(self, root, token):
+        self.root = root
+        self.root.title('ANTech - Конфигуратор ПК')
+        self.root.state('zoomed')
+        self.root.configure(bg='#f5f5f5')
+        self.token = token
+        self.user_data = None
+        self.base_url = 'http://127.0.0.1:8000'
+        self.load_user_data()
+         
+        self.style = ttk.Style()
+        self.style.configure('Header.TLabel', font=('Arial', 16, 'bold'))
+        self.style.configure('Normal.TLabel', font=('Arial', 12))
+        self.style.configure('Accent.TButton', font=('Arial', 12), background='#5814ea', foreground='#ffffff')
+        
+        self.main_container = ttk.Frame(root)
+        self.main_container.pack(fill='both', expand=True)
+        
+        self.header_frame = ttk.Frame(self.main_container)
+        self.header_frame.pack(fill='x', pady=10)
+        
+        ttk.Label(self.header_frame, text=f'Добро пожаловать, {self.user_data["name"]}!', style='Header.TLabel').pack(side='left', padx=20)
+        ttk.Button(self.header_frame, text='Выход', command=self.logout, style='Accent.TButton').pack(side='right', padx=20)
+        
+        self.tab_control = ttk.Notebook(self.main_container)
+        
+        self.tab_catalog = ttk.Frame(self.tab_control)
+        self.tab_configurations = ttk.Frame(self.tab_control)
+        self.tab_orders = ttk.Frame(self.tab_control)
+        self.tab_profile = ttk.Frame(self.tab_control)
+        
+        self.tab_control.add(self.tab_catalog, text='Каталог компонентов')
+        self.tab_control.add(self.tab_configurations, text='Мои конфигурации')
+        self.tab_control.add(self.tab_orders, text='Мои заказы')
+        self.tab_control.add(self.tab_profile, text='Профиль')
+        
+        self.tab_control.pack(fill='both', expand=1)
+        
+        self.init_catalog_tab()
+        self.init_configurations_tab()
+        self.init_orders_tab()
+        self.init_profile_tab()
+    
+    def load_user_data(self):
+        """Загрузка данных пользователя по API"""
+        try:
+            headers = {'token': self.token}
+            response = requests.get(f'{self.base_url}/users/me/', headers=headers)
+            if response.status_code == 200:
+                self.user_data = response.json()
+            else:
+                messagebox.showerror('Ошибка!', 'Не удалось получить данные пользователя')
+                self.logout()
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Ошибка соединения с сервером: {e}')
+            self.logout()
+    
+    def logout(self):
+        self.root.destroy()
+        root = tk.Tk()
+        AuthApp(root)
+        root.mainloop()
+        
+    def init_catalog_tab(self):
+        """Функция для отображения каталога с компонентами"""
+        ttk.Label(self.tab_catalog, text='Каталог компонентов', style='Header.TLabel').pack(pady=10)
+        ttk.Button(self.tab_catalog, text='Обновить', command=self.load_components, style='Accent.TButton').pack(pady=5)
+        
+        columns = ('id', 'name', 'type', 'manufacture', 'price', 'stock')
+        self.tree = ttk.Treeview(self.tab_catalog, columns=columns, show='headings', height=20)
+        
+        self.tree.heading('id', text='ID')
+        self.tree.heading('name', text='Название')
+        self.tree.heading('type', text='Тип')
+        self.tree.heading('manufacture', text='Производитель')
+        self.tree.heading('price', text='Цена')
+        self.tree.heading('stock', text='Наличие')
+        
+        self.tree.column('id', width=50)
+        self.tree.column('name', width=200)
+        self.tree.column('type', width=150)
+        self.tree.column('manufacture', width=150)
+        self.tree.column('price', width=100)
+        self.tree.column('stock', width=100)
+        
+        scrollbar = ttk.Scrollbar(self.tab_catalog, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscroll=scrollbar.set)
+        
+        self.tree.pack(side='left', fill='both', expand=True, padx=10, pady=10)
+        scrollbar.pack(side='right', fill='y')
+        
+        self.tree.bind('<<TreeviewSelect>>', self.show_component_specification)
+        
+        self.spec_frame = ttk.Frame(self.tab_catalog)   
+        self.spec_frame.pack(fill='x', padx=10, pady=10)
+        self.spec_text = ttk.Label(self.spec_frame, text='Спецификация:', height=8, state='disabled')
+        self.spec_text.pack(fill='x', pady=5)
+        
+        self.load_components()
+        
+    def load_components(self):
+        """Загрузка компонентов из API"""
+        try:
+            headers = {'token': self.token}
+            response = requests.get(f'{self.base_url}/components/get_all/', headers=headers)
+            
+            if response.status_code == 200: 
+                for item in self.tree.get_children():
+                    self.tree.delete(item)
+                
+                components = response.json()
+                
+                self.components_data = components
+                
+                for component in components:
+                    self.tree.insert('', 'end', values=(
+                        component['id'],
+                        component['name'],
+                        component['type_name'],
+                        component['manufacture_name'],
+                        component['price'],
+                        component['stock_quantity']
+                    ))
+            else:
+                messagebox.showerror('Ошибка!', 'Не удалось загрузить данные о компонентах')
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Не удалось получить данные от сервера: {e}')
+    
+    def show_component_specification(self):
+        """Отображение выбранного элемента"""
+        selected_item = self.tree.selection()
+        if not selected_item:
+            return
+        
+        item = selected_item[0]
+        item_index = self.tree.index(item)       
+        
+        component = self.components_data[item_index]
+        specification = component.get('specification')
+        
+        
 class AuthApp:
     """Класс для создания окна авторизации пользователей"""
     def __init__(self, root):
