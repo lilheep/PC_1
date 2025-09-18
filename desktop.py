@@ -1,13 +1,13 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, scrolledtext
 from tkinter.font import Font
 import requests
 import os
 import re
 import json
 
-os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
-os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
+# os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
+# os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
 
 class MainApp:
     def __init__(self, root, token):
@@ -105,7 +105,8 @@ class MainApp:
         
         self.spec_frame = ttk.Frame(self.tab_catalog)   
         self.spec_frame.pack(fill='x', padx=10, pady=10)
-        self.spec_text = ttk.Label(self.spec_frame, text='Спецификация:', height=8, state='disabled')
+        ttk.Label(self.spec_frame, text='Характеристики:', style='Header.TLabel').pack(anchor='w')
+        self.spec_text = scrolledtext.ScrolledText(self.spec_frame, height=8, state='disabled')
         self.spec_text.pack(fill='x', pady=5)
         
         self.load_components()
@@ -138,7 +139,7 @@ class MainApp:
         except requests.exceptions.RequestException as e:
             messagebox.showerror('Ошибка!', f'Не удалось получить данные от сервера: {e}')
     
-    def show_component_specification(self):
+    def show_component_specification(self, event):
         """Отображение выбранного элемента"""
         selected_item = self.tree.selection()
         if not selected_item:
@@ -149,6 +150,77 @@ class MainApp:
         
         component = self.components_data[item_index]
         specification = component.get('specification')
+        self.spec_text.config(state='normal')
+        self.spec_text.delete(1.0, tk.END)
+        
+        if specification:
+            try:
+                formated_spec = json.dumps(specification, indent=2, ensure_ascii=False)
+                self.spec_text.insert(tk.END, formated_spec)
+            except:
+                self.spec_text.insert(tk.END, str(specification))
+        else:    
+            self.spec_text.insert(tk.END, 'Дополнительная информация о товаре отсутствует.')
+            
+        self.spec_text.config(state='disabled')
+    
+    def init_configurations_tab(self):
+        pass
+        
+    def init_orders_tab(self):
+        pass
+        
+    def init_profile_tab(self):
+        """"Инициализация вкладки профиля пользователя"""
+        profile_frame = ttk.Frame(self.tab_profile)
+        profile_frame.pack(fill='both', padx=10, pady=10)
+        
+        ttk.Label(profile_frame, text='Мой профиль', style='Header.TLabel').pack(pady=20)
+        
+        info_frame = ttk.LabelFrame(profile_frame, text='Личная информация')
+        info_frame.pack(fill='x', pady=10, padx=10)
+        
+        user_info = [
+            ('ФИО:', self.user_data['name']),
+            ('Email:', self.user_data['email']),
+            ('Телефон:', self.user_data['phone']),
+            ('Роль:', self.user_data['role']),
+            ('Адрес:', self.user_data['address'] or 'Не указан')
+        ]
+        
+        for i, (label, value) in enumerate(user_info):
+            row_frame = ttk.Frame(info_frame)
+            row_frame.pack(fill='x', pady=5)
+            
+            ttk.Label(row_frame, text=label, style='Normal.TLabel', width=15, anchor='e').pack(side='left', padx=5)
+            ttk.Label(row_frame, text=value, style='Normal.TLabel', anchor='w').pack(side='left', padx=5, fill='x', expand=True)
+            
+        button_frame = ttk.Frame(profile_frame)
+        button_frame.pack(pady=20)
+        
+        ttk.Button(button_frame, text='Сменить пароль', command=self.change_password
+                   style='Accent.TButton').pack(side='left', padx=10)
+        
+        ttk.Button(button_frame, text='Выйти из аккаунта',
+                   command=self.logout, style='Accent.TButton').pack(side='left', padx=10)
+    
+    def change_password(self):
+        """Смена пароля"""
+        passoword_window = tk.Toplevel(self.root)
+        passoword_window.title('Смена пароля')
+        passoword_window.geometry('500x400')
+        passoword_window.resizable(False, False)
+        passoword_window.grab_set()
+        
+        passoword_window.transient(self.root)
+        passoword_window.geometry(f'+{self.root.winfo_x() + 100}+{self.root.winfo_y() + 100}')
+        
+        user_email = self.user_data['email']
+        content_frame = ttk.Frame(passoword_window)
+        content_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        
+        ttk.Label(content_frame, text='Смена пароля', style='Header.TLabel').pack(pady=20)
+        ttk.Label(content_frame, text=f'Для смены пароля будет отправлен код на email: {user_email}', style='Normal.TLabel')
         
         
 class AuthApp:

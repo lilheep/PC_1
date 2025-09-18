@@ -154,7 +154,7 @@ def create_users():
                 
             },
             {
-                 "name": "Архипов Анндрей Валерьевич",
+                 "name": "Архипов Андрей Валерьевич",
                 "email": "andrey.ded0000@gmail.com",
                 "password": hash_password('127869jhg'),
                 "phone": "89535671234",
