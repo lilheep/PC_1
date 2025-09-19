@@ -308,6 +308,29 @@ async def delete_profile(token: str = Header(...)):
     user.delete_instance()
     return {'message': 'Пользователь успешно удален.'}
 
+@app.put('/users/edit_address/', tags=['Users'])
+async def edit_user_address(new_address: str, token: str = Header(...)):
+    """Изменение адреса пользователем"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    try:
+        if not current_user:
+            raise HTTPException(401, 'Недействительный токен.')
+        
+        user = Users.select().where(Users.id==current_user.id).first()
+        if not user:
+            raise HTTPException(404, 'Пользователь не найден.')
+
+        user.address = new_address
+        user.save()
+        
+        return {'message': 'Адрес успешно изменен.'}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    
+    except Exception as e:
+        raise HTTPException(500, f'Не удалось изменить адрес для пользователя: {e}')
+    
 @app.post('/users/set_role/', tags=['Users'])
 async def set_role_user(data: SetRoleRequest, token: str = Header(...)):
     """Изменение роли пользователей администратором"""

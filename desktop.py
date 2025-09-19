@@ -198,31 +198,163 @@ class MainApp:
         button_frame = ttk.Frame(profile_frame)
         button_frame.pack(pady=20)
         
-        ttk.Button(button_frame, text='Сменить пароль', command=self.change_password
+        ttk.Button(button_frame, text='Сменить пароль', command=self.change_password,
                    style='Accent.TButton').pack(side='left', padx=10)
         
         ttk.Button(button_frame, text='Выйти из аккаунта',
                    command=self.logout, style='Accent.TButton').pack(side='left', padx=10)
+        
+        ttk.Button(button_frame, text='Изменить адрес',
+                   command=self.edit_address, style='Accent.TButton').pack(side='left', padx=10)
+        
+        ttk.Button(button_frame, text='Обновить', 
+                   command=self.init_profile_tab, style='Accent.TButton').pack(side='left', padx=10)
+        
+    def edit_address(self):
+        """Измнение адреса"""
+        edit_window = tk.Toplevel(self.root)
+        edit_window.title('Изменение адреса')
+        edit_window.geometry('600x500')
+        edit_window.resizable(False, False)
+        
+        edit_window.grab_set()
+        edit_window.transient(self.root)
+        edit_window.geometry(f'+{self.root.winfo_x() + 100}+{self.root.winfo_y() + 100}')
+        
+        content_frame = ttk.Frame(edit_window)
+        content_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        
+        ttk.Label(content_frame, text='Изменение адреса доставки', style='Header.TLabel').pack(pady=20)
+        
+        current_address = self.user_data.get('address', 'Не указан')
+        ttk.Label(content_frame, text = 'Новый адрес:', style='Normal.TLabel').pack(pady=5, anchor='w')
+        address_entry = ttk.Entry(content_frame, width=50, font=('Arial', 12))
+        address_entry.pack(pady=5, fill='x')
+        
+        def save_address():
+            new_address = address_entry.get().strip()
+            if not new_address:
+                messagebox.showerror('Ошибка!', 'Поле адреса не может быть пустым')
+                return
+            
+            try:
+                token = self.token
+                if not token:
+                    messagebox.showerror('Ошибка!', 'Токен авторизации не найден')
+                    return
+                
+                response = requests.put(
+                    f'{self.base_url}/users/edit_address/',
+                    params={'new_address': new_address},
+                    headers={'token': self.token}
+                )
+                
+                if response.status_code == 200:
+                    messagebox.showinfo('Успех!', 'Адрес успешно изменен')
+                    self.user_data['address'] = new_address
+                    edit_window.destroy()
+                else:
+                    error = response.json().get('message', 'Не удалось изменить адрес')
+                    messagebox.showerror('Ошибка!', error)
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
+        
+        save_btn = ttk.Button(content_frame, text='Сохранить адрес', command=save_address, style='Accent.TButton')
+        save_btn.pack(pady=20)
+        
+        ttk.Button(content_frame, text='Отмена', command=edit_window.destroy, style='Accent.TButton').pack(pady=10)
     
     def change_password(self):
         """Смена пароля"""
-        passoword_window = tk.Toplevel(self.root)
-        passoword_window.title('Смена пароля')
-        passoword_window.geometry('500x400')
-        passoword_window.resizable(False, False)
-        passoword_window.grab_set()
+        password_window = tk.Toplevel(self.root)
+        password_window.title('Смена пароля')
+        password_window.geometry('600x500')
+        password_window.resizable(False, False)
+        password_window.grab_set()
         
-        passoword_window.transient(self.root)
-        passoword_window.geometry(f'+{self.root.winfo_x() + 100}+{self.root.winfo_y() + 100}')
+        password_window.transient(self.root)
+        password_window.geometry(f'+{self.root.winfo_x() + 100}+{self.root.winfo_y() + 100}')
         
         user_email = self.user_data['email']
-        content_frame = ttk.Frame(passoword_window)
+        content_frame = ttk.Frame(password_window)
         content_frame.pack(fill='both', expand=True, padx=20, pady=20)
         
         ttk.Label(content_frame, text='Смена пароля', style='Header.TLabel').pack(pady=20)
-        ttk.Label(content_frame, text=f'Для смены пароля будет отправлен код на email: {user_email}', style='Normal.TLabel')
+        ttk.Label(content_frame, text=f'Для смены пароля будет отправлен код на email: {user_email}', style='Normal.TLabel', wraplength=400).pack(pady=10)
         
+        code_frame = ttk.Frame(content_frame)
+
+        def show_code_entry():
+            send_btn.pack_forget()
+            
+            ttk.Label(code_frame, text='Код подтверждения', style='Normal.TLabel').pack(pady=5)
+            code_entry = ttk.Entry(code_frame, width=30, font=('Arial', 12))
+            code_entry.pack(pady=5)
+            
+            ttk.Label(code_frame, text='Новый пароль:', style='Normal.TLabel').pack(pady=5)
+            new_password_entry = ttk.Entry(code_frame, width=30, show='*', font=('Arial', 12))
+            new_password_entry.pack(pady=5)
+            
+            ttk.Label(code_frame, text='Подтвердите пароль:', style='Normal.TLabel').pack(pady=5)
+            confirm_password_entry = ttk.Entry(code_frame, width=30, show='*', font=('Arial', 12))
+            confirm_password_entry.pack(pady=5)
+            
+            def confirm_change():
+                code = code_entry.get().strip()
+                new_password = new_password_entry.get().strip()
+                confirm_password = confirm_password_entry.get().strip()
+                
+                if not all([code, new_password, confirm_password]):
+                    messagebox.showerror('Ошибка!', 'Заполните все поля')
+                    return
+                
+                if new_password != confirm_password:
+                    messagebox.showerror('Ошибка!', 'Пароли не совпадают')
+                    return
+                
+                try:
+                    response = requests.post(
+                        f'{self.base_url}/users/confirm_change_password/',
+                        params={
+                            'email': user_email,
+                            'code': code,
+                            'new_password': new_password
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        messagebox.showinfo('Успех!', 'Пароль успешно изменен')
+                        password_window.destroy()
+                    else:
+                        error = response.json().get('detail', 'Ошибка смены пароля')
+                        messagebox.showerror('Ошибка', error)
+                except requests.exceptions.RequestException as e:
+                    messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
+            
+            ttk.Button(code_frame, text='Подтвердить смену', command=confirm_change, style='Accent.TButton').pack(pady=20)
+            code_frame.pack()
         
+        def send_code():
+            try:
+                response = requests.post(
+                    f'{self.base_url}/users/change_password/',
+                    params={'email': user_email}
+                )
+                
+                if response.status_code == 200:
+                    messagebox.showinfo('Успех!', 'Код подтверждения отправлен на ваш email')
+                    show_code_entry()
+                else:
+                    error = response.json().get('detail', 'Не удалось отправить код подтверждения')
+                    messagebox.showerror('Ошибка!', error)
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
+
+        send_btn = ttk.Button(content_frame, text='Отправить код', command=send_code, style='Accent.TButton')
+        send_btn.pack(pady=20)
+        
+        ttk.Button(content_frame, text='Отмена', command=password_window.destroy, style='Accent.TButton').pack(pady=10)
+
 class AuthApp:
     """Класс для создания окна авторизации пользователей"""
     def __init__(self, root):
