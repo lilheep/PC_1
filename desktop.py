@@ -165,10 +165,941 @@ class MainApp:
         self.spec_text.config(state='disabled')
     
     def init_configurations_tab(self):
-        pass
+        """Инициализация вкладки моих конфигураций"""
+        main_frame = ttk.Frame(self.tab_configurations)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        ttk.Label(main_frame, text='Мои конфигурации ПК', style='Header.TLabel').pack(pady=10)
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+        
+        ttk.Button(button_frame, text='Создать новую конфигурацию', 
+                command=self.create_new_configuration, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Обновить список', 
+                command=self.load_configurations, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Удалить конфигурацию', 
+                command=self.delete_configuration, style='Accent.TButton').pack(side='left', padx=5)
+
+        paned_window = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
+        paned_window.pack(fill='both', expand=True, pady=10)
+
+        left_frame = ttk.Frame(paned_window)
+        paned_window.add(left_frame, weight=1)
+        
+        ttk.Label(left_frame, text='Мои конфигурации:', style='Normal.TLabel').pack(anchor='w', pady=5)
+
+        columns = ('id', 'name', 'description', 'created')
+        self.config_tree = ttk.Treeview(left_frame, columns=columns, show='headings', height=15)
+        
+        self.config_tree.heading('id', text='ID')
+        self.config_tree.heading('name', text='Название')
+        self.config_tree.heading('description', text='Описание')
+        self.config_tree.heading('created', text='Дата создания')
+        
+        self.config_tree.column('id', width=50)
+        self.config_tree.column('name', width=150)
+        self.config_tree.column('description', width=200)
+        self.config_tree.column('created', width=120)
+        
+        scrollbar_left = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.config_tree.yview)
+        self.config_tree.configure(yscroll=scrollbar_left.set)
+        
+        self.config_tree.pack(side='left', fill='both', expand=True)
+        scrollbar_left.pack(side='right', fill='y')
+
+        right_frame = ttk.Frame(paned_window)
+        paned_window.add(right_frame, weight=2)
+        
+        ttk.Label(right_frame, text='Сборка конфигурации:', style='Normal.TLabel').pack(anchor='w', pady=5)
+
+        config_columns = ('type', 'component', 'price', 'quantity', 'total')
+        self.config_components_tree = ttk.Treeview(right_frame, columns=config_columns, show='headings', height=10)
+        
+        self.config_components_tree.heading('type', text='Тип')
+        self.config_components_tree.heading('component', text='Компонент')
+        self.config_components_tree.heading('price', text='Цена')
+        self.config_components_tree.heading('quantity', text='Кол-во')
+        self.config_components_tree.heading('total', text='Итого')
+        
+        self.config_components_tree.column('type', width=100)
+        self.config_components_tree.column('component', width=200)
+        self.config_components_tree.column('price', width=80)
+        self.config_components_tree.column('quantity', width=60)
+        self.config_components_tree.column('total', width=80)
+        
+        scrollbar_right = ttk.Scrollbar(right_frame, orient=tk.VERTICAL, command=self.config_components_tree.yview)
+        self.config_components_tree.configure(yscroll=scrollbar_right.set)
+        
+        self.config_components_tree.pack(fill='both', expand=True)
+        scrollbar_right.pack(side='right', fill='y')
+
+        bottom_frame = ttk.Frame(right_frame)
+        bottom_frame.pack(fill='x', pady=10)
+        
+        self.total_label = ttk.Label(bottom_frame, text='Общая сумма: 0 руб.', style='Header.TLabel')
+        self.total_label.pack(side='left', padx=10)
+
+        manage_frame = ttk.Frame(bottom_frame)
+        manage_frame.pack(side='right', padx=10)
+        
+        ttk.Button(manage_frame, text='Добавить компонент', 
+                command=self.add_component_to_config, style='Accent.TButton').pack(side='left', padx=2)
+        ttk.Button(manage_frame, text='Удалить компонент', 
+                command=self.remove_component_from_config, style='Accent.TButton').pack(side='left', padx=2)
+        ttk.Button(manage_frame, text='Создать заказ', 
+                command=self.create_order_from_config, style='Accent.TButton').pack(side='left', padx=2)
+
+        self.config_tree.bind('<<TreeviewSelect>>', self.on_configuration_select)
+        self.config_components_tree.bind('<<TreeviewSelect>>', self.on_component_select)
+
+        self.load_configurations()
+
+    def load_configurations(self):
+        """Загрузка конфигураций пользователя"""
+        try:
+            headers = {'token': self.token}
+            response = requests.get(f'{self.base_url}/configurations/get_all/', headers=headers)
+            
+            if response.status_code == 200:
+                for item in self.config_tree.get_children():
+                    self.config_tree.delete(item)
+                
+                configurations = response.json()
+                self.configurations_data = {}
+                
+                for config in configurations:
+                    config_id = config['id']
+                    self.configurations_data[config_id] = config
+
+                    created_at = config.get('created_at', '')
+                    if created_at:
+                        try:
+                            created_at = created_at.split('T')[0]
+                        except:
+                            pass
+                    
+                    self.config_tree.insert('', 'end', values=(
+                        config_id,
+                        config['name_config'] or f'Конфигурация #{config_id}',
+                        config['description'] or '-',
+                        created_at
+                    ))
+            else:
+                messagebox.showerror('Ошибка!', 'Не удалось загрузить конфигурации')
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+
+    def on_configuration_select(self, event):
+        """Обработка выбора конфигурации"""
+        selected = self.config_tree.selection()
+        if not selected:
+            return
+        
+        item = selected[0]
+        config_id = self.config_tree.item(item)['values'][0]
+        self.current_config_id = config_id
+
+        self.load_configuration_components(config_id)
+
+    def load_configuration_components(self, config_id):
+        """Загрузка компонентов конфигурации"""
+        try:
+            headers = {'token': self.token}
+            response = requests.get(f'{self.base_url}/configurations/{config_id}/components/', headers=headers)
+            
+            if response.status_code == 200:
+                for item in self.config_components_tree.get_children():
+                    self.config_components_tree.delete(item)
+                
+                components = response.json()
+                total_amount = 0
+                
+                for component in components:
+                    total_price = component['total_price']
+                    total_amount += total_price
+                    
+                    self.config_components_tree.insert('', 'end', values=(
+                        component['type_name'] or '-',
+                        component['component_name'],
+                        f"{component['price']:.2f} руб.",
+                        component['quantity'],
+                        f"{total_price:.2f} руб."
+                    ), tags=(component['id'],))
+                
+                self.total_label.config(text=f'Общая сумма: {total_amount:.2f} руб.')
+            else:
+                messagebox.showerror('Ошибка!', 'Не удалось загрузить компоненты конфигурации')
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+
+    def on_component_select(self, event):
+        """Обработка выбора компонента в конфигурации"""
+        self.selected_component_id = None
+        selected = self.config_components_tree.selection()
+        if selected:
+            item = selected[0]
+            self.selected_component_id = self.config_components_tree.item(item)['tags'][0]
+
+    def create_new_configuration(self):
+        """Создание новой конфигурации"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title('Создание новой конфигурации')
+        dialog.geometry('500x300')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text='Название конфигурации:').pack(pady=10)
+        name_entry = ttk.Entry(dialog, width=40)
+        name_entry.pack(pady=5)
+        
+        ttk.Label(dialog, text='Описание (необязательно):').pack(pady=10)
+        desc_entry = ttk.Entry(dialog, width=40)
+        desc_entry.pack(pady=5)
+        
+        def create_config():
+            name = name_entry.get().strip()
+            description = desc_entry.get().strip()
+            
+            if not name:
+                messagebox.showerror('Ошибка!', 'Введите название конфигурации')
+                return
+            
+            try:
+                headers = {'token': self.token}
+                response = requests.post(
+                    f'{self.base_url}/configurations/create/',
+                    headers=headers,
+                    json={'name_config': name, 'description': description}
+                )
+                
+                if response.status_code == 200:
+                    messagebox.showinfo('Успех!', 'Конфигурация создана')
+                    dialog.destroy()
+                    self.load_configurations()
+                else:
+                    error = response.json().get('detail', 'Ошибка создания')
+                    messagebox.showerror('Ошибка!', error)
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+        
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=20)
+        
+        ttk.Button(button_frame, text='Создать', command=create_config, style='Accent.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy).pack(side='left', padx=10)
+
+    def add_component_to_config(self):
+        """Добавление компонента в конфигурацию"""
+        if not hasattr(self, 'current_config_id') or not self.current_config_id:
+            messagebox.showwarning('Внимание!', 'Выберите конфигурацию для добавления компонентов')
+            return
+
+        if not hasattr(self, 'components_data') or not self.components_data:
+            messagebox.showwarning('Внимание!', 'Сначала загрузите каталог компонентов')
+            return
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title('Добавление компонента')
+        dialog.geometry('600x400')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text='Выберите компонент:').pack(pady=10)
+
+        filter_frame = ttk.Frame(dialog)
+        filter_frame.pack(fill='x', padx=10, pady=5)
+        
+        ttk.Label(filter_frame, text='Фильтр по типу:').pack(side='left')
+        type_var = tk.StringVar()
+        type_combo = ttk.Combobox(filter_frame, textvariable=type_var)
+
+        types = list(set(comp['type_name'] for comp in self.components_data if comp['type_name']))
+        type_combo['values'] = ['Все'] + types
+        type_combo.set('Все')
+        type_combo.pack(side='left', padx=5)
+
+        columns = ('name', 'type', 'manufacture', 'price', 'stock')
+        comp_tree = ttk.Treeview(dialog, columns=columns, show='headings', height=10)
+        
+        comp_tree.heading('name', text='Название')
+        comp_tree.heading('type', text='Тип')
+        comp_tree.heading('manufacture', text='Производитель')
+        comp_tree.heading('price', text='Цена')
+        comp_tree.heading('stock', text='Наличие')
+        
+        comp_tree.column('name', width=200)
+        comp_tree.column('type', width=100)
+        comp_tree.column('manufacture', width=100)
+        comp_tree.column('price', width=80)
+        comp_tree.column('stock', width=60)
+        
+        scrollbar = ttk.Scrollbar(dialog, orient=tk.VERTICAL, command=comp_tree.yview)
+        comp_tree.configure(yscroll=scrollbar.set)
+        
+        comp_tree.pack(fill='both', expand=True, padx=10, pady=5)
+        scrollbar.pack(side='right', fill='y')
+
+        quantity_frame = ttk.Frame(dialog)
+        quantity_frame.pack(fill='x', padx=10, pady=5)
+        
+        ttk.Label(quantity_frame, text='Количество:').pack(side='left')
+        quantity_var = tk.IntVar(value=1)
+        quantity_spin = ttk.Spinbox(quantity_frame, from_=1, to=100, textvariable=quantity_var, width=10)
+        quantity_spin.pack(side='left', padx=5)
+        
+        def filter_components():
+            """Фильтрация компонентов по типу"""
+            for item in comp_tree.get_children():
+                comp_tree.delete(item)
+            
+            selected_type = type_var.get()
+            for component in self.components_data:
+                if selected_type == 'Все' or component['type_name'] == selected_type:
+                    comp_tree.insert('', 'end', values=(
+                        component['name'],
+                        component['type_name'] or '-',
+                        component['manufacture_name'] or '-',
+                        f"{component['price']:.2f} руб.",
+                        component['stock_quantity']
+                    ), tags=(component['name'],))
+        
+        def add_selected_component():
+            """Добавление выбранного компонента"""
+            selected = comp_tree.selection()
+            if not selected:
+                messagebox.showwarning('Внимание!', 'Выберите компонент')
+                return
+            
+            item = selected[0]
+            component_name = comp_tree.item(item)['tags'][0]
+            quantity = quantity_var.get()
+            
+            try:
+                headers = {'token': self.token}
+                response = requests.post(
+                    f'{self.base_url}/configurations/{self.current_config_id}/components/',
+                    headers=headers,
+                    json={'component_name': component_name, 'quantity': quantity}
+                )
+                
+                if response.status_code == 200:
+                    messagebox.showinfo('Успех!', 'Компонент добавлен')
+                    dialog.destroy()
+                    self.load_configuration_components(self.current_config_id)
+                else:
+                    error = response.json().get('detail', 'Ошибка добавления')
+                    messagebox.showerror('Ошибка!', error)
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+    
+        filter_components()
+
+        type_combo.bind('<<ComboboxSelected>>', lambda e: filter_components())
+        
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=10)
+        
+        ttk.Button(button_frame, text='Добавить', command=add_selected_component, 
+                style='Accent.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy).pack(side='left', padx=10)
+
+    def remove_component_from_config(self):
+        """Удаление компонента из конфигурации"""
+        if not hasattr(self, 'current_config_id') or not self.current_config_id:
+            messagebox.showwarning('Внимание!', 'Выберите конфигурацию')
+            return
+        
+        if not hasattr(self, 'selected_component_id') or not self.selected_component_id:
+            messagebox.showwarning('Внимание!', 'Выберите компонент для удаления')
+            return
+        
+        try:
+            headers = {'token': self.token}
+            response = requests.delete(
+                f'{self.base_url}/configurations/{self.current_config_id}/components/{self.selected_component_id}/',
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                messagebox.showinfo('Успех!', 'Компонент удален')
+                self.load_configuration_components(self.current_config_id)
+            else:
+                error = response.json().get('detail', 'Ошибка удаления')
+                messagebox.showerror('Ошибка!', error)
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+
+    def create_order_from_config(self):
+        """Создание заказа из конфигурации"""
+        if not hasattr(self, 'current_config_id') or not self.current_config_id:
+            messagebox.showwarning('Внимание!', 'Выберите конфигурацию для заказа')
+            return
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title('Создание заказа')
+        dialog.geometry('300x150')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text='Количество конфигураций:').pack(pady=10)
+        quantity_var = tk.IntVar(value=1)
+        quantity_spin = ttk.Spinbox(dialog, from_=1, to=100, textvariable=quantity_var, width=10)
+        quantity_spin.pack(pady=5)
+        
+        def create_order():
+            quantity = quantity_var.get()
+            
+            try:
+                headers = {'token': self.token}
+                response = requests.post(
+                    f'{self.base_url}/orders/create_order/',
+                    headers=headers,
+                    json={'configuration_id': self.current_config_id, 'quantity': quantity}
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    messagebox.showinfo('Успех!', f'Заказ создан! ID: {result["order_id"]}')
+
+                    self.load_components()
+                    
+                    dialog.destroy()
+                else:
+                    error = response.json().get('detail', 'Ошибка создания заказа')
+                    messagebox.showerror('Ошибка!', error)
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+        
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=20)
+        
+        ttk.Button(button_frame, text='Создать заказ', command=create_order, 
+                style='Accent.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy).pack(side='left', padx=10)
+
+    def delete_configuration(self):
+        """Удаление конфигурации"""
+        if not hasattr(self, 'current_config_id') or not self.current_config_id:
+            messagebox.showwarning('Внимание!', 'Выберите конфигурацию для удаления')
+            return
+        
+        config_name = self.configurations_data[self.current_config_id]['name_config']
+        
+        if messagebox.askyesno('Подтверждение', f'Удалить конфигурацию "{config_name}"?'):
+            try:
+                headers = {'token': self.token}
+                response = requests.delete(
+                    f'{self.base_url}/configurations/delete_by_id/',
+                    headers=headers,
+                    params={'config_id': self.current_config_id}
+                )
+                
+                if response.status_code == 200:
+                    messagebox.showinfo('Успех!', 'Конфигурация удалена')
+                    self.current_config_id = None
+                    self.load_configurations()
+                    for item in self.config_components_tree.get_children():
+                        self.config_components_tree.delete(item)
+                    self.total_label.config(text='Общая сумма: 0 руб.')
+                else:
+                    error = response.json().get('detail', 'Ошибка удаления')
+                    messagebox.showerror('Ошибка!', error)
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
         
     def init_orders_tab(self):
-        pass
+        """Инициализация вкладки моих заказов"""
+        main_frame = ttk.Frame(self.tab_orders)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        ttk.Label(main_frame, text='Мои заказы', style='Header.TLabel').pack(pady=10)
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+        
+        ttk.Button(button_frame, text='Обновить список', 
+                command=self.load_orders, style='Accent.TButton').pack(side='left', padx=5)
+
+        paned_window = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
+        paned_window.pack(fill='both', expand=True, pady=10)
+
+        left_frame = ttk.Frame(paned_window)
+        paned_window.add(left_frame, weight=1)
+        
+        ttk.Label(left_frame, text='Список заказов:', style='Normal.TLabel').pack(anchor='w', pady=5)
+
+        columns = ('id', 'date', 'total', 'status')
+        self.orders_tree = ttk.Treeview(left_frame, columns=columns, show='headings', height=15)
+        
+        self.orders_tree.heading('id', text='ID заказа')
+        self.orders_tree.heading('date', text='Дата заказа')
+        self.orders_tree.heading('total', text='Общая сумма')
+        self.orders_tree.heading('status', text='Статус')
+        
+        self.orders_tree.column('id', width=80)
+        self.orders_tree.column('date', width=120)
+        self.orders_tree.column('total', width=100)
+        self.orders_tree.column('status', width=120)
+        
+        scrollbar_left = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.orders_tree.yview)
+        self.orders_tree.configure(yscroll=scrollbar_left.set)
+        
+        self.orders_tree.pack(side='left', fill='both', expand=True)
+        scrollbar_left.pack(side='right', fill='y')
+
+        right_frame = ttk.Frame(paned_window)
+        paned_window.add(right_frame, weight=2)
+        
+        ttk.Label(right_frame, text='Детали заказа:', style='Normal.TLabel').pack(anchor='w', pady=5)
+
+        order_columns = ('config_name', 'quantity', 'price', 'total')
+        self.order_details_tree = ttk.Treeview(right_frame, columns=order_columns, show='headings', height=10)
+        
+        self.order_details_tree.heading('config_name', text='Конфигурация')
+        self.order_details_tree.heading('quantity', text='Количество')
+        self.order_details_tree.heading('price', text='Цена за шт.')
+        self.order_details_tree.heading('total', text='Итого')
+        
+        self.order_details_tree.column('config_name', width=200)
+        self.order_details_tree.column('quantity', width=80)
+        self.order_details_tree.column('price', width=100)
+        self.order_details_tree.column('total', width=100)
+        
+        scrollbar_right = ttk.Scrollbar(right_frame, orient=tk.VERTICAL, command=self.order_details_tree.yview)
+        self.order_details_tree.configure(yscroll=scrollbar_right.set)
+        
+        self.order_details_tree.pack(fill='both', expand=True)
+        scrollbar_right.pack(side='right', fill='y')
+
+        info_frame = ttk.Frame(right_frame)
+        info_frame.pack(fill='x', pady=10)
+        
+        button_frame_right = ttk.Frame(right_frame)
+        button_frame_right.pack(fill='x', pady=10)
+        
+        ttk.Button(button_frame_right, text='Оплатить заказ',
+                   command=self.pay_selected_order, style='Accent.TButton').pack(side='right', padx=10)
+        
+        ttk.Button(button_frame_right, text='Отменить заказ', 
+                command=self.cancel_selected_order, style='Accent.TButton').pack(side='right', padx=10)
+        
+        self.order_info_label = ttk.Label(info_frame, text='Выберите заказ для просмотра деталей', 
+                                        style='Normal.TLabel')
+        self.order_info_label.pack(anchor='w', padx=10)
+
+
+        self.orders_tree.bind('<<TreeviewSelect>>', self.on_order_select)
+
+        self.load_orders()
+    
+    def pay_selected_order(self):
+        """Оплата выбранного заказа"""
+        selected = self.orders_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите заказ для оплаты')
+            return
+        
+        item = selected[0]
+        order_id = self.orders_tree.item(item)['values'][0]
+        order_total = self.orders_tree.item(item)['values'][2]
+
+        pay_window = tk.Toplevel(self.root)
+        pay_window.title('Оплата заказа')
+        pay_window.geometry('800x800')
+        pay_window.resizable(False, False)
+        pay_window.configure(bg='white')
+        pay_window.transient(self.root)
+        pay_window.grab_set()
+
+        pay_window.geometry(f'+{self.root.winfo_x() + 200}+{self.root.winfo_y() + 50}')
+
+        title_font = ('Arial', 20, 'bold')
+        label_font = ('Arial', 11)
+        entry_font = ('Arial', 12)
+        button_font = ('Arial', 12, 'bold')
+        card_font = ('Arial', 16, 'bold')
+        card_small_font = ('Arial', 10)
+
+        ttk.Label(pay_window, text='Оплата заказа', font=title_font, 
+                background='white', foreground='#2c3e50').pack(pady=20)
+ 
+        ttk.Label(pay_window, text=f'Заказ №{order_id}', font=('Arial', 14), 
+                background='white', foreground='#27ae60').pack(pady=5)
+        ttk.Label(pay_window, text=f'Сумма: {order_total}', font=('Arial', 12), 
+                background='white', foreground='#2c3e50').pack(pady=5)
+        
+        card_frame = tk.Frame(pay_window, bg='#27ae60', bd=2, relief='raised', 
+                            width=400, height=220)
+        card_frame.pack(pady=20, padx=50, fill='both')
+        card_frame.pack_propagate(False)
+
+        tk.Label(card_frame, text='МИР', font=('Arial', 24, 'bold'), 
+                bg='#27ae60', fg='white').place(x=300, y=20)
+
+        tk.Label(card_frame, text='Номер карты', font=card_small_font, 
+                bg='#27ae60', fg='#ecf0f1', anchor='w').place(x=30, y=80)
+        card_display = tk.Label(card_frame, text='**** **** **** ****', 
+                            font=card_font, bg='#27ae60', fg='white')
+        card_display.place(x=30, y=100)
+
+        tk.Label(card_frame, text='Срок действия', font=card_small_font, 
+                bg='#27ae60', fg='#ecf0f1').place(x=30, y=150)
+        tk.Label(card_frame, text='MM / ГГ', font=('Arial', 12), 
+                bg='#27ae60', fg='white').place(x=30, y=170)
+        
+        tk.Label(card_frame, text='CVC / CVV', font=card_small_font, 
+                bg='#27ae60', fg='#ecf0f1').place(x=150, y=150)
+        tk.Label(card_frame, text='***', font=('Arial', 12), 
+                bg='#27ae60', fg='white').place(x=150, y=170)
+
+        form_frame = tk.Frame(pay_window, bg='white')
+        form_frame.pack(pady=20, padx=50, fill='both')
+
+        ttk.Label(form_frame, text='Номер карты:', font=label_font, 
+                background='white', foreground='#2c3e50').pack(anchor='w', pady=5)
+        
+        card_number_var = tk.StringVar()
+        card_number_entry = ttk.Entry(form_frame, textvariable=card_number_var, 
+                                    font=entry_font, width=25)
+        card_number_entry.pack(fill='x', pady=5)
+
+        expiry_cvc_frame = tk.Frame(form_frame, bg='white')
+        expiry_cvc_frame.pack(fill='x', pady=10)
+
+        expiry_frame = tk.Frame(expiry_cvc_frame, bg='white')
+        expiry_frame.pack(side='left', padx=(0, 20))
+        
+        ttk.Label(expiry_frame, text='Срок действия (ММ/ГГ):', font=label_font, 
+                background='white', foreground='#2c3e50').pack(anchor='w')
+        
+        expiry_subframe = tk.Frame(expiry_frame, bg='white')
+        expiry_subframe.pack(fill='x', pady=5)
+        
+        month_var = tk.StringVar()
+        month_entry = ttk.Entry(expiry_subframe, textvariable=month_var, 
+                            font=entry_font, width=5)
+        month_entry.pack(side='left', padx=(0, 5))
+        
+        ttk.Label(expiry_subframe, text='/', font=entry_font, 
+                background='white', foreground='#2c3e50').pack(side='left')
+        
+        year_var = tk.StringVar()
+        year_entry = ttk.Entry(expiry_subframe, textvariable=year_var, 
+                            font=entry_font, width=5)
+        year_entry.pack(side='left', padx=(5, 0))
+ 
+        cvc_frame = tk.Frame(expiry_cvc_frame, bg='white')
+        cvc_frame.pack(side='left')
+        
+        ttk.Label(cvc_frame, text='CVC/CVV код:', font=label_font, 
+                background='white', foreground='#2c3e50').pack(anchor='w')
+        
+        cvc_var = tk.StringVar()
+        cvc_entry = ttk.Entry(cvc_frame, textvariable=cvc_var, 
+                            font=entry_font, width=8, show='*')
+        cvc_entry.pack(fill='x', pady=5)
+
+        ttk.Label(form_frame, text='Имя владельца карты:', font=label_font, 
+                background='white', foreground='#2c3e50').pack(anchor='w', pady=5)
+        
+        name_var = tk.StringVar()
+        name_entry = ttk.Entry(form_frame, textvariable=name_var, 
+                            font=entry_font, width=25)
+        name_entry.pack(fill='x', pady=5)
+
+        def update_card_display(*args):
+            """Обновление отображения номера карты"""
+            card_number = card_number_var.get().replace(' ', '')
+
+            if len(card_number) == 0:
+                displayed = '*' * 16
+            else:
+                displayed = card_number.ljust(16, '*')[:16]
+
+            formatted = ' '.join([displayed[i:i+4] for i in range(0, 16, 4)])
+            card_display.config(text=formatted)
+        
+        def update_expiry_display(*args):
+            """Обновление отображения срока действия"""
+            month = month_var.get().ljust(2, '*')
+            year = year_var.get().ljust(2, '*')
+            expiry_text = f"{month} / {year}"
+        
+        def update_cvc_display(*args):
+            """Обновление отображения CVC"""
+            cvc = cvc_var.get().ljust(3, '*')
+
+        card_number_var.trace('w', update_card_display)
+        month_var.trace('w', update_expiry_display)
+        year_var.trace('w', update_expiry_display)
+        cvc_var.trace('w', update_cvc_display)
+
+        def format_card_number(*args):
+            value = card_number_var.get().replace(' ', '')[:16]
+            formatted = ' '.join([value[i:i+4] for i in range(0, len(value), 4)])
+            if card_number_var.get() != formatted:
+                card_number_var.set(formatted)
+        
+        card_number_var.trace('w', format_card_number)
+
+        def validate_month(*args):
+            value = month_var.get()
+            if value.isdigit() and len(value) <= 2:
+                if value and int(value) > 12:
+                    month_var.set('12')
+                return True
+            elif value == '':
+                return True
+            else:
+                month_var.set(''.join(filter(str.isdigit, value)))
+        
+        def validate_year(*args):
+            value = year_var.get()
+            if value.isdigit() and len(value) <= 2:
+                return True
+            elif value == '':
+                return True
+            else:
+                year_var.set(''.join(filter(str.isdigit, value)))
+        
+        def validate_cvc(*args):
+            value = cvc_var.get()
+            if value.isdigit() and len(value) <= 3:
+                return True
+            elif value == '':
+                return True
+            else:
+                cvc_var.set(''.join(filter(str.isdigit, value)))
+        
+        month_var.trace('w', lambda *args: validate_month())
+        year_var.trace('w', lambda *args: validate_year())
+        cvc_var.trace('w', lambda *args: validate_cvc())
+
+        button_frame = tk.Frame(pay_window, bg='white')
+        button_frame.pack(pady=20)
+        
+        def process_payment():
+            """Обработка оплаты"""
+            if not all([card_number_var.get(), month_var.get(), 
+                    year_var.get(), cvc_var.get(), name_var.get()]):
+                messagebox.showerror('Ошибка!', 'Заполните все поля')
+                return
+
+            card_number = card_number_var.get().replace(' ', '')
+            if len(card_number) != 16 or not card_number.isdigit():
+                messagebox.showerror('Ошибка!', 'Введите корректный номер карты (16 цифр)')
+                return
+
+            if len(month_var.get()) != 2 or not month_var.get().isdigit():
+                messagebox.showerror('Ошибка!', 'Введите корректный месяц (2 цифры)')
+                return
+            
+            month = int(month_var.get())
+            if month < 1 or month > 12:
+                messagebox.showerror('Ошибка!', 'Месяц должен быть от 01 до 12')
+                return
+            
+            if len(year_var.get()) != 2 or not year_var.get().isdigit():
+                messagebox.showerror('Ошибка!', 'Введите корректный год (2 цифры)')
+                return
+
+            if len(cvc_var.get()) != 3 or not cvc_var.get().isdigit():
+                messagebox.showerror('Ошибка!', 'Введите корректный CVC код (3 цифры)')
+                return
+
+            try:
+                headers = {'token': self.token}
+
+                status_response = requests.get(
+                    f'{self.base_url}/order_status/get_all/', 
+                    headers=headers
+                )
+                
+                if status_response.status_code == 200:
+                    statuses = status_response.json()
+                    paid_status_id = None
+                    for status in statuses:
+                        if status['name'] == 'Оплачен':
+                            paid_status_id = status['id']
+                            break
+                    
+                    if paid_status_id:
+                        update_response = requests.put(
+                            f'{self.base_url}/orders/admin/edit_order_status/',
+                            headers=headers,
+                            params={
+                                'order_id': order_id,
+                                'status_id': paid_status_id
+                            }
+                        )
+                        
+                        if update_response.status_code == 200:
+                            messagebox.showinfo('Успех!', 
+                                f'Заказ #{order_id} успешно оплачен!\n'
+                                f'Сумма: {order_total}\n'
+                                f'Спасибо за покупку!')
+                            pay_window.destroy()
+                            self.load_orders()
+                        else:
+                            error = update_response.json().get('detail', 'Ошибка обновления статуса')
+                            messagebox.showerror('Ошибка!', error)
+                    else:
+                        messagebox.showerror('Ошибка!', 'Статус "Оплачен" не найден в системе')
+                else:
+                    messagebox.showerror('Ошибка!', 'Не удалось получить статусы заказов')
+                    
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+        
+        style = ttk.Style()
+        style.configure('Payment.TButton', font=button_font, padding=10)
+        
+        ttk.Button(button_frame, text='Оплатить заказ', 
+                command=process_payment, style='Payment.TButton').pack(side='left', padx=10)
+        
+        ttk.Button(button_frame, text='Отмена', 
+                command=pay_window.destroy, style='Payment.TButton').pack(side='left', padx=10)
+
+        card_number_entry.focus()
+
+        expiry_display = tk.Label(card_frame, text='MM / ГГ', font=('Arial', 12), 
+                                bg='#27ae60', fg='white')
+        expiry_display.place(x=30, y=170)
+        
+        cvc_display = tk.Label(card_frame, text='***', font=('Arial', 12), 
+                            bg='#27ae60', fg='white')
+        cvc_display.place(x=150, y=170)
+        
+        name_display = tk.Label(card_frame, text='ВЛАДЕЛЕЦ КАРТЫ', font=('Arial', 10), 
+                            bg='#27ae60', fg='white')
+        name_display.place(x=30, y=190)
+
+        def update_expiry_display(*args):
+            month = month_var.get().ljust(2, '*')[:2]
+            year = year_var.get().ljust(2, '*')[:2]
+            expiry_display.config(text=f'{month} / {year}')
+        
+        def update_cvc_display(*args):
+            cvc = cvc_var.get().ljust(3, '*')[:3]
+            cvc_display.config(text=cvc)
+        
+        def update_name_display(*args):
+            name = name_var.get().upper() or 'ВЛАДЕЛЕЦ КАРТЫ'
+            name_display.config(text=name[:20])
+        
+        month_var.trace('w', update_expiry_display)
+        year_var.trace('w', update_expiry_display)
+        cvc_var.trace('w', update_cvc_display)
+        name_var.trace('w', update_name_display)
+            
+    def cancel_selected_order(self):
+        """Отмена выбранного заказа"""
+        selected = self.orders_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите заказ для отмены')
+            return
+        
+        item = selected[0]
+        order_id = self.orders_tree.item(item)['values'][0]
+        
+        if messagebox.askyesno('Подтверждение', f'Вы уверены, что хотите отменить заказ #{order_id}?'):
+            try:
+                headers = {'token': self.token}
+                response = requests.delete(
+                    f'{self.base_url}/orders/cancel_order/',
+                    headers=headers,
+                    params={'order_id': order_id}
+                )
+                
+                if response.status_code == 200:
+                    messagebox.showinfo('Успех!', 'Заказ отменен')
+                    self.load_orders()
+                    for item in self.order_details_tree.get_children():
+                        self.order_details_tree.delete(item)
+                    self.order_info_label.config(text='Выберите заказ для просмотра деталей')
+                else:
+                    error = response.json().get('detail', 'Ошибка отмены заказа')
+                    messagebox.showerror('Ошибка!', error)
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+
+    def load_orders(self):
+        """Загрузка заказов пользователя"""
+        try:
+            headers = {'token': self.token}
+            response = requests.get(f'{self.base_url}/orders/get_user_orders/', headers=headers)
+            
+            if response.status_code == 200:
+                for item in self.orders_tree.get_children():
+                    self.orders_tree.delete(item)
+                
+                orders = response.json()
+                self.orders_data = {}
+                
+                for order in orders:
+                    order_id = order['id']
+                    self.orders_data[order_id] = order
+
+                    order_date = order.get('order_date', '')
+                    if order_date:
+                        try:
+                            order_date = order_date.split('T')[0]
+                        except:
+                            pass
+
+                    total_amount = order.get('total_amount', 0)
+                    total_text = f"{total_amount:.2f} руб." if total_amount else "0 руб."
+                    
+                    self.orders_tree.insert('', 'end', values=(
+                        order_id,
+                        order_date,
+                        total_text,
+                        order.get('status_name', 'Неизвестно')
+                    ))
+            else:
+                messagebox.showerror('Ошибка!', 'Не удалось загрузить заказы')
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+
+    def on_order_select(self, event):
+        """Обработка выбора заказа"""
+        selected = self.orders_tree.selection()
+        if not selected:
+            return
+        
+        item = selected[0]
+        order_id = self.orders_tree.item(item)['values'][0]
+        
+        if order_id in self.orders_data:
+            order = self.orders_data[order_id]
+            self.display_order_details(order)
+
+    def display_order_details(self, order):
+        """Отображение деталей выбранного заказа"""
+        for item in self.order_details_tree.get_children():
+            self.order_details_tree.delete(item)
+
+        order_id = order['id']
+        order_date = order.get('order_date', 'Неизвестно')
+        total_amount = order.get('total_amount', 0)
+        status = order.get('status_name', 'Неизвестно')
+        
+        info_text = f"Заказ #{order_id} | Дата: {order_date} | Статус: {status} | Общая сумма: {total_amount:.2f} руб."
+        self.order_info_label.config(text=info_text)
+
+        configurations = order.get('configurations', [])
+        for config in configurations:
+            config_name = config.get('configuration_name', 'Неизвестно')
+            quantity = config.get('quantity', 1)
+            price = config.get('price_at_time', 0)
+            total = config.get('total', price * quantity)
+            
+            self.order_details_tree.insert('', 'end', values=(
+                config_name,
+                quantity,
+                f"{price:.2f} руб.",
+                f"{total:.2f} руб."
+            ))
         
     def init_profile_tab(self):
         """"Инициализация вкладки профиля пользователя"""
@@ -208,7 +1139,7 @@ class MainApp:
                    command=self.edit_address, style='Accent.TButton').pack(side='left', padx=10)
         
         ttk.Button(button_frame, text='Обновить', 
-                   command=self.init_profile_tab, style='Accent.TButton').pack(side='left', padx=10)
+                   command=self.load_user_data, style='Accent.TButton').pack(side='left', padx=10)
         
     def edit_address(self):
         """Измнение адреса"""
