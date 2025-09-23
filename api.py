@@ -1293,6 +1293,41 @@ async def get_user_orders(token: str = Header(...)):
     except Exception as e:
         raise HTTPException(500, f'Ошибка при получении заказов: {e}')
 
+@app.put('/orders/user/update_order_status/', tags=['Orders'])
+async def user_update_order_status(order_id: int, new_status: str, token: str = Header(...)):
+    """Изменение статуса заказа пользователем (только для оплаты)"""
+    current_user = get_user_by_token(token, 'Пользователь')
+    
+    try:
+        order = Orders.select().where(
+            (Orders.id == order_id) & 
+            (Orders.user_id == current_user.id)
+        ).first()
+        
+        if not order:
+            raise HTTPException(404, 'Заказ не найден или у вас нет к нему доступа.')
+
+        if new_status != 'Оплачен':
+            raise HTTPException(403, 'Вы можете изменить статус только на "Оплачен"')
+        
+        status = OrdersStatus.get_or_none(OrdersStatus.name == new_status)
+        if not status:
+            raise HTTPException(404, 'Статус не найден.')
+        
+        order.status_id = status.id
+        order.save()
+        
+        return {
+            'message': f'Статус заказа #{order_id} изменен на "{new_status}".',
+            'order_id': order_id,
+            'new_status': new_status
+        }
+    
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(500, f'Ошибка при изменении статуса заказа: {e}')
+
 @app.get('/orders/get_order_by_id/', tags=['Orders'])
 async def get_order_detail(order_id: int, token: str = Header(...)):
     """Получение деталей заказа"""

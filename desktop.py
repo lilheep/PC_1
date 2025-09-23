@@ -19,6 +19,10 @@ class MainApp:
         self.user_data = None
         self.base_url = 'http://127.0.0.1:8000'
         self.load_user_data()
+        
+        if self.user_data and self.user_data.get('role') == 'Администратор':
+            self.open_admin_app()
+            return
          
         self.style = ttk.Style()
         self.style.configure('Header.TLabel', font=('Arial', 16, 'bold'))
@@ -52,6 +56,12 @@ class MainApp:
         self.init_configurations_tab()
         self.init_orders_tab()
         self.init_profile_tab()
+    
+    def open_admin_app(self):
+        self.root.destroy()
+        root = tk.Tk()
+        AdminApp(root, self.token)
+        root.mainloop()
     
     def load_user_data(self):
         """Загрузка данных пользователя по API"""
@@ -702,6 +712,11 @@ class MainApp:
         item = selected[0]
         order_id = self.orders_tree.item(item)['values'][0]
         order_total = self.orders_tree.item(item)['values'][2]
+        order_status = self.orders_tree.item(item)['values'][3]
+        
+        if order_status == 'Оплачен':
+            messagebox.showerror('Ошибка!', 'Выбранная конфигурация уже оплачена')
+            return
 
         pay_window = tk.Toplevel(self.root)
         pay_window.title('Оплата заказа')
@@ -734,7 +749,7 @@ class MainApp:
         card_frame.pack_propagate(False)
 
         tk.Label(card_frame, text='МИР', font=('Arial', 24, 'bold'), 
-                bg='#27ae60', fg='white').place(x=300, y=20)
+                bg='#27ae60', fg='white').place(x=610, y=20)
 
         tk.Label(card_frame, text='Номер карты', font=card_small_font, 
                 bg='#27ae60', fg='#ecf0f1', anchor='w').place(x=30, y=80)
@@ -909,45 +924,27 @@ class MainApp:
 
             try:
                 headers = {'token': self.token}
-
-                status_response = requests.get(
-                    f'{self.base_url}/order_status/get_all/', 
-                    headers=headers
+ 
+                update_response = requests.put(
+                    f'{self.base_url}/orders/user/update_order_status/',
+                    headers=headers,
+                    params={
+                        'order_id': order_id,
+                        'new_status': 'Оплачен'
+                    }
                 )
                 
-                if status_response.status_code == 200:
-                    statuses = status_response.json()
-                    paid_status_id = None
-                    for status in statuses:
-                        if status['name'] == 'Оплачен':
-                            paid_status_id = status['id']
-                            break
-                    
-                    if paid_status_id:
-                        update_response = requests.put(
-                            f'{self.base_url}/orders/admin/edit_order_status/',
-                            headers=headers,
-                            params={
-                                'order_id': order_id,
-                                'status_id': paid_status_id
-                            }
-                        )
-                        
-                        if update_response.status_code == 200:
-                            messagebox.showinfo('Успех!', 
-                                f'Заказ #{order_id} успешно оплачен!\n'
-                                f'Сумма: {order_total}\n'
-                                f'Спасибо за покупку!')
-                            pay_window.destroy()
-                            self.load_orders()
-                        else:
-                            error = update_response.json().get('detail', 'Ошибка обновления статуса')
-                            messagebox.showerror('Ошибка!', error)
-                    else:
-                        messagebox.showerror('Ошибка!', 'Статус "Оплачен" не найден в системе')
+                if update_response.status_code == 200:
+                    messagebox.showinfo('Успех!', 
+                        f'Заказ #{order_id} успешно оплачен!\n'
+                        f'Сумма: {order_total}\n'
+                        f'Спасибо за покупку!')
+                    pay_window.destroy()
+                    self.load_orders()
                 else:
-                    messagebox.showerror('Ошибка!', 'Не удалось получить статусы заказов')
-                    
+                    error = update_response.json().get('detail', 'Ошибка обновления статуса')
+                    messagebox.showerror('Ошибка!', error)
+                            
             except requests.exceptions.RequestException as e:
                 messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
         
@@ -1129,17 +1126,17 @@ class MainApp:
         button_frame = ttk.Frame(profile_frame)
         button_frame.pack(pady=20)
         
-        ttk.Button(button_frame, text='Сменить пароль', command=self.change_password,
-                   style='Accent.TButton').pack(side='left', padx=10)
-        
-        ttk.Button(button_frame, text='Выйти из аккаунта',
-                   command=self.logout, style='Accent.TButton').pack(side='left', padx=10)
-        
         ttk.Button(button_frame, text='Изменить адрес',
                    command=self.edit_address, style='Accent.TButton').pack(side='left', padx=10)
         
         ttk.Button(button_frame, text='Обновить', 
                    command=self.load_user_data, style='Accent.TButton').pack(side='left', padx=10)
+        
+        ttk.Button(button_frame, text='Сменить пароль', command=self.change_password,
+                   style='Accent.TButton').pack(side='left', padx=10)
+        
+        ttk.Button(button_frame, text='Выйти из аккаунта',
+                   command=self.logout, style='Accent.TButton').pack(side='left', padx=10)
         
     def edit_address(self):
         """Измнение адреса"""
@@ -1285,6 +1282,9 @@ class MainApp:
         send_btn.pack(pady=20)
         
         ttk.Button(content_frame, text='Отмена', command=password_window.destroy, style='Accent.TButton').pack(pady=10)
+
+class AdminApp:
+    pass
 
 class AuthApp:
     """Класс для создания окна авторизации пользователей"""
