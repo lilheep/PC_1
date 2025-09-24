@@ -435,6 +435,7 @@ async def get_all_manufactures(token: str = Header(...)):
         manufactures = Manufactures.select()
 
         return [{
+            'id': manufacture.id,
             'name': manufacture.name
         } for manufacture in manufactures]
     

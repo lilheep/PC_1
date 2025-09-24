@@ -27,7 +27,7 @@ class MainApp:
         self.style = ttk.Style()
         self.style.configure('Header.TLabel', font=('Arial', 16, 'bold'))
         self.style.configure('Normal.TLabel', font=('Arial', 12))
-        self.style.configure('Accent.TButton', font=('Arial', 12), background='#5814ea', foreground='#ffffff')
+        self.style.configure('Accent.TButton', font=('Arial', 12), background="#000000", foreground="#000000")
         
         self.main_container = ttk.Frame(root)
         self.main_container.pack(fill='both', expand=True)
@@ -1284,7 +1284,703 @@ class MainApp:
         ttk.Button(content_frame, text='Отмена', command=password_window.destroy, style='Accent.TButton').pack(pady=10)
 
 class AdminApp:
-    pass
+    def __init__(self, root, token):
+        self.root = root
+        self.root.title('ANTech - Панель администратора')
+        self.root.state('zoomed')
+        self.root.configure(bg='#f5f5f5')
+        self.token = token
+        self.base_url = 'http://127.0.0.1:8000'
+        
+        self.style = ttk.Style()
+        self.style.configure('Header.TLabel', font=('Arial', 16, 'bold'))
+        self.style.configure('Normal.TLabel', font=('Arial', 12))
+        self.style.configure('Accent.TButton', font=('Arial', 12))
+        
+        self.main_container = ttk.Frame(root)
+        self.main_container.pack(fill='both', expand=True)
+        
+        self.header_frame = ttk.Frame(self.main_container)
+        self.header_frame.pack(fill='x', pady=10)
+        
+        ttk.Label(self.header_frame, text='Панель администратора', style='Header.TLabel').pack(side='left', padx=20)
+        ttk.Button(self.header_frame, text='Выход', command=self.logout, style='Accent.TButton').pack(side='right', padx=20)
+        
+        self.tab_control = ttk.Notebook(self.main_container)
+        
+        self.tab_users = ttk.Frame(self.tab_control)
+        self.tab_manufactures = ttk.Frame(self.tab_control)
+        self.tab_components = ttk.Frame(self.tab_control)
+        self.tab_configurations = ttk.Frame(self.tab_control)
+        self.tab_orders = ttk.Frame(self.tab_control)
+        
+        self.tab_control.add(self.tab_users, text='Пользователи')
+        self.tab_control.add(self.tab_manufactures, text='Производители')
+        self.tab_control.add(self.tab_components, text='Компоненты')
+        self.tab_control.add(self.tab_configurations, text='Конфигурации')
+        self.tab_control.add(self.tab_orders, text='Заказы')
+        
+        self.tab_control.pack(fill='both', expand=1)
+        
+        self.init_users_tab()
+        self.init_manufactures_tab()
+        self.init_components_tab()
+        self.init_configurations_tab()
+        self.init_orders_tab()
+    
+    def logout(self):
+        self.root.destroy()
+        root = tk.Tk()
+        AuthApp(root)
+        root.mainloop()
+    
+    def make_api_request(self, endpoint, method='GET', params=None, json_data=None):
+        """Универсальный метод для API запросов"""
+        try:
+            headers = {'token': self.token}
+            url = f'{self.base_url}{endpoint}'
+            
+            if method == 'GET':
+                response = requests.get(url, headers=headers, params=params)
+            elif method == 'POST':
+                response = requests.post(url, headers=headers, json=json_data, params=params)
+            elif method == 'PUT':
+                response = requests.put(url, headers=headers, json=json_data, params=params)
+            elif method == 'DELETE':
+                response = requests.delete(url, headers=headers, params=params)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                error = response.json().get('detail', 'Ошибка API')
+                messagebox.showerror('Ошибка!', error)
+                return None
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+            return None
+    
+    def init_users_tab(self):
+        """Вкладка управления пользователями"""
+        main_frame = ttk.Frame(self.tab_users)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        ttk.Label(main_frame, text='Управление пользователями', style='Header.TLabel').pack(pady=10)
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+        
+        ttk.Button(button_frame, text='Обновить список', 
+                  command=self.load_users, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Изменить роль', 
+                  command=self.change_user_role, style='Accent.TButton').pack(side='left', padx=5)
+
+        columns = ('id', 'name', 'email', 'phone', 'role', 'address')
+        self.users_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
+        
+        self.users_tree.heading('id', text='ID')
+        self.users_tree.heading('name', text='ФИО')
+        self.users_tree.heading('email', text='Email')
+        self.users_tree.heading('phone', text='Телефон')
+        self.users_tree.heading('role', text='Роль')
+        self.users_tree.heading('address', text='Адрес')
+        
+        self.users_tree.column('id', width=50)
+        self.users_tree.column('name', width=150)
+        self.users_tree.column('email', width=150)
+        self.users_tree.column('phone', width=120)
+        self.users_tree.column('role', width=100)
+        self.users_tree.column('address', width=200)
+        
+        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.users_tree.yview)
+        self.users_tree.configure(yscroll=scrollbar.set)
+        
+        self.users_tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        self.load_users()
+    
+    def load_users(self):
+        """Загрузка списка пользователей"""
+        data = self.make_api_request('/users/get_all/')
+        if data:
+            for item in self.users_tree.get_children():
+                self.users_tree.delete(item)
+            
+            for user in data:
+                self.users_tree.insert('', 'end', values=(
+                    user['id'],
+                    user['name'],
+                    user['email'],
+                    user['phone'],
+                    user['role'],
+                    user['address']
+                ))
+    
+    def change_user_role(self):
+        """Изменение роли пользователя"""
+        selected = self.users_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите пользователя')
+            return
+        
+        item = selected[0]
+        user_data = self.users_tree.item(item)['values']
+        user_email = user_data[2]
+        current_role = user_data[4]
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title('Изменение роли пользователя')
+        dialog.geometry('350x200')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text=f'Пользователь: {user_email}').pack(pady=10)
+        ttk.Label(dialog, text=f'Текущая роль: {current_role}').pack(pady=5)
+        
+        role_var = tk.StringVar(value=current_role)
+        role_combo = ttk.Combobox(dialog, textvariable=role_var, state='readonly')
+        role_combo['values'] = ('Пользователь', 'Администратор')
+        role_combo.pack(pady=10)
+        
+        def save_role():
+            new_role = role_var.get()
+            if new_role == current_role:
+                messagebox.showinfo('Информация', 'Роль не изменена')
+                dialog.destroy()
+                return
+            
+            data = self.make_api_request('/users/set_role/', method='POST',
+                                       json_data={'email': user_email, 'new_role': new_role})
+            if data:
+                messagebox.showinfo('Успех!', 'Роль пользователя изменена')
+                dialog.destroy()
+                self.load_users()
+        
+        ttk.Button(dialog, text='Сохранить', command=save_role, style='Accent.TButton').pack(pady=10)
+    
+    def init_manufactures_tab(self):
+        """Вкладка управления производителями"""
+        main_frame = ttk.Frame(self.tab_manufactures)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        ttk.Label(main_frame, text='Управление производителями', style='Header.TLabel').pack(pady=10)
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+        
+        ttk.Button(button_frame, text='Добавить', 
+                  command=self.add_manufacture, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Обновить', 
+                  command=self.load_manufactures, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Удалить', 
+                  command=self.delete_manufacture, style='Accent.TButton').pack(side='left', padx=5)
+
+        columns = ('id', 'name')
+        self.manufactures_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
+        
+        self.manufactures_tree.heading('id', text='ID')
+        self.manufactures_tree.heading('name', text='Название')
+        
+        self.manufactures_tree.column('id', width=50)
+        self.manufactures_tree.column('name', width=200)
+        
+        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.manufactures_tree.yview)
+        self.manufactures_tree.configure(yscroll=scrollbar.set)
+        
+        self.manufactures_tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        self.load_manufactures()
+    
+    def load_manufactures(self):
+        """Загрузка списка производителей"""
+        try:
+            data = self.make_api_request('/manufactures/get_manufactures/')
+            if data:
+                for item in self.manufactures_tree.get_children():
+                    self.manufactures_tree.delete(item)
+
+                for manufacture in data:
+                    self.manufactures_tree.insert('', 'end', values=(
+                        manufacture.get('id', 'N/A'),
+                        manufacture.get('name', 'Неизвестно')
+                    ))
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Произошла ошибка при загрузке списка производителей: {e}')
+      
+    def add_manufacture(self):
+        """Добавление производителя"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title('Добавление производителя')
+        dialog.geometry('300x150')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text='Название производителя:').pack(pady=10)
+        name_entry = ttk.Entry(dialog, width=30)
+        name_entry.pack(pady=10)
+        
+        def save_manufacture():
+            name = name_entry.get().strip()
+            if not name:
+                messagebox.showerror('Ошибка!', 'Введите название')
+                return
+            
+            data = self.make_api_request('/manufactures/add_manufacture/', method='POST',
+                                       params={'name': name})
+            if data:
+                messagebox.showinfo('Успех!', 'Производитель добавлен')
+                dialog.destroy()
+                self.load_manufactures()
+        
+        ttk.Button(dialog, text='Сохранить', command=save_manufacture, style='Accent.TButton').pack(pady=10)
+    
+    def delete_manufacture(self):
+        """Удаление производителя"""
+        selected = self.manufactures_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите производителя')
+            return
+        
+        item = selected[0]
+        manufacture_id = self.manufactures_tree.item(item)['values'][0]
+        manufacture_name = self.manufactures_tree.item(item)['values'][1]
+        
+        if messagebox.askyesno('Подтверждение', f'Удалить производителя "{manufacture_name}"?'):
+            data = self.make_api_request('/manufactures/del_manufacture_by_id/', method='DELETE',
+                                       params={'manufacture_id': manufacture_id})
+            if data:
+                messagebox.showinfo('Успех!', 'Производитель удален')
+                self.load_manufactures()
+    
+    def init_components_tab(self):
+        """Вкладка управления компонентами"""
+        main_frame = ttk.Frame(self.tab_components)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        ttk.Label(main_frame, text='Управление компонентами', style='Header.TLabel').pack(pady=10)
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+        
+        ttk.Button(button_frame, text='Добавить', 
+                  command=self.add_component, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Обновить', 
+                  command=self.load_components, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Редактировать', 
+                  command=self.edit_component, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Удалить', 
+                  command=self.delete_component, style='Accent.TButton').pack(side='left', padx=5)
+        
+
+        columns = ('id', 'name', 'type', 'manufacture', 'price', 'stock')
+        self.components_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
+        
+        self.components_tree.heading('id', text='ID')
+        self.components_tree.heading('name', text='Название')
+        self.components_tree.heading('type', text='Тип')
+        self.components_tree.heading('manufacture', text='Производитель')
+        self.components_tree.heading('price', text='Цена')
+        self.components_tree.heading('stock', text='Наличие')
+        
+        self.components_tree.column('id', width=50)
+        self.components_tree.column('name', width=150)
+        self.components_tree.column('type', width=100)
+        self.components_tree.column('manufacture', width=120)
+        self.components_tree.column('price', width=80)
+        self.components_tree.column('stock', width=80)
+        
+        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.components_tree.yview)
+        self.components_tree.configure(yscroll=scrollbar.set)
+        
+        self.components_tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        self.load_components()
+    
+    def load_components(self):
+        """Загрузка списка компонентов"""
+        data = self.make_api_request('/components/get_all/')
+        if data:
+            for item in self.components_tree.get_children():
+                self.components_tree.delete(item)
+            
+            for component in data:
+                self.components_tree.insert('', 'end', values=(
+                    component['id'],
+                    component['name'],
+                    component['type_name'],
+                    component['manufacture_name'],
+                    component['price'],
+                    component['stock_quantity']
+                ))
+    
+    def add_component(self):
+        """Добавление компонента"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title('Добавление компонента')
+        dialog.geometry('400x400')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text='Название:').grid(row=0, column=0, padx=10, pady=5, sticky='e')
+        name_entry = ttk.Entry(dialog, width=30)
+        name_entry.grid(row=0, column=1, padx=10, pady=5)
+        
+        ttk.Label(dialog, text='Тип:').grid(row=1, column=0, padx=10, pady=5, sticky='e')
+        type_entry = ttk.Entry(dialog, width=30)
+        type_entry.grid(row=1, column=1, padx=10, pady=5)
+        
+        ttk.Label(dialog, text='Производитель:').grid(row=2, column=0, padx=10, pady=5, sticky='e')
+        manufacture_entry = ttk.Entry(dialog, width=30)
+        manufacture_entry.grid(row=2, column=1, padx=10, pady=5)
+        
+        ttk.Label(dialog, text='Цена:').grid(row=3, column=0, padx=10, pady=5, sticky='e')
+        price_entry = ttk.Entry(dialog, width=30)
+        price_entry.grid(row=3, column=1, padx=10, pady=5)
+        
+        ttk.Label(dialog, text='Количество:').grid(row=4, column=0, padx=10, pady=5, sticky='e')
+        stock_entry = ttk.Entry(dialog, width=30)
+        stock_entry.grid(row=4, column=1, padx=10, pady=5)
+        
+        def save_component():
+            name = name_entry.get().strip()
+            type_name = type_entry.get().strip()
+            manufacture_name = manufacture_entry.get().strip()
+            
+            if not name:
+                messagebox.showerror('Ошибка!', 'Введите название')
+                return
+            
+            try:
+                price = float(price_entry.get())
+                stock = int(stock_entry.get())
+            except ValueError:
+                messagebox.showerror('Ошибка!', 'Цена и количество должны быть числами')
+                return
+            
+            component_data = {
+                'name': name,
+                'type_name': type_name if type_name else None,
+                'manufacture_name': manufacture_name if manufacture_name else None,
+                'price': price,
+                'stock_quantity': stock,
+                'specification': []
+            }
+            
+            data = self.make_api_request('/components/create/', method='POST', json_data=component_data)
+            if data:
+                messagebox.showinfo('Успех!', 'Компонент добавлен')
+                dialog.destroy()
+                self.load_components()
+        
+        ttk.Button(dialog, text='Сохранить', command=save_component, style='Accent.TButton').grid(row=5, column=0, columnspan=2, pady=20)
+    
+    def edit_component(self):
+        """Редактирование компонента"""
+        selected = self.components_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите компонент')
+            return
+
+        messagebox.showinfo('Информация', 'Функция редактирования в разработке')
+    
+    def delete_component(self):
+        """Удаление компонента"""
+        selected = self.components_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите компонент')
+            return
+        
+        item = selected[0]
+        component_id = self.components_tree.item(item)['values'][0]
+        component_name = self.components_tree.item(item)['values'][1]
+        
+        if messagebox.askyesno('Подтверждение', f'Удалить компонент "{component_name}"?'):
+            data = self.make_api_request('/components/delete_by_id/', method='DELETE',
+                                       params={'component_id': component_id})
+            if data:
+                messagebox.showinfo('Успех!', 'Компонент удален')
+                self.load_components()
+    
+    def init_configurations_tab(self):
+        """Вкладка управления конфигурациями"""
+        main_frame = ttk.Frame(self.tab_configurations)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        ttk.Label(main_frame, text='Управление конфигурациями', style='Header.TLabel').pack(pady=10)
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+        
+        ttk.Button(button_frame, text='Обновить', 
+                  command=self.load_configurations, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Просмотреть', 
+                  command=self.view_configuration, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Удалить', 
+                  command=self.delete_configuration, style='Accent.TButton').pack(side='left', padx=5)
+
+        columns = ('id', 'user', 'name', 'description', 'created')
+        self.configurations_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
+        
+        self.configurations_tree.heading('id', text='ID')
+        self.configurations_tree.heading('user', text='Пользователь')
+        self.configurations_tree.heading('name', text='Название')
+        self.configurations_tree.heading('description', text='Описание')
+        self.configurations_tree.heading('created', text='Дата создания')
+        
+        self.configurations_tree.column('id', width=50)
+        self.configurations_tree.column('user', width=120)
+        self.configurations_tree.column('name', width=150)
+        self.configurations_tree.column('description', width=200)
+        self.configurations_tree.column('created', width=120)
+        
+        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.configurations_tree.yview)
+        self.configurations_tree.configure(yscroll=scrollbar.set)
+        
+        self.configurations_tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        self.load_configurations()
+    
+    def load_configurations(self):
+        """Загрузка списка конфигураций"""
+        data = self.make_api_request('/configurations/admin/get_all/')
+        if data:
+            for item in self.configurations_tree.get_children():
+                self.configurations_tree.delete(item)
+            
+            for config in data:
+                created_at = config.get('created_at', '')
+                if created_at:
+                    try:
+                        created_at = created_at.split('T')[0]
+                    except:
+                        pass
+                
+                self.configurations_tree.insert('', 'end', values=(
+                    config['id'],
+                    config['user_name'],
+                    config['name_config'],
+                    config['description'] or '-',
+                    created_at
+                ))
+    
+    def view_configuration(self):
+        """Просмотр конфигурации"""
+        selected = self.configurations_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите конфигурацию')
+            return
+        
+        item = selected[0]
+        config_id = self.configurations_tree.item(item)['values'][0]
+        
+        data = self.make_api_request(f'/configurations/admin/{config_id}/components/')
+        if data:
+            dialog = tk.Toplevel(self.root)
+            dialog.title(f'Компоненты конфигурации #{config_id}')
+            dialog.geometry('1000x600')
+            dialog.transient(self.root)
+            dialog.grab_set()
+            
+            columns = ('component', 'type', 'manufacture', 'price', 'quantity', 'total')
+            tree = ttk.Treeview(dialog, columns=columns, show='headings', height=15)
+            
+            tree.heading('component', text='Компонент')
+            tree.heading('type', text='Тип')
+            tree.heading('manufacture', text='Производитель')
+            tree.heading('price', text='Цена')
+            tree.heading('quantity', text='Количество')
+            tree.heading('total', text='Итого')
+            
+            tree.column('component', width=150)
+            tree.column('type', width=100)
+            tree.column('manufacture', width=120)
+            tree.column('price', width=80)
+            tree.column('quantity', width=80)
+            tree.column('total', width=80)
+            
+            scrollbar = ttk.Scrollbar(dialog, orient=tk.VERTICAL, command=tree.yview)
+            tree.configure(yscroll=scrollbar.set)
+            
+            tree.pack(side='left', fill='both', expand=True, padx=10, pady=10)
+            scrollbar.pack(side='right', fill='y')
+            
+            total_amount = 0
+            for component in data:
+                total_price = component['total_price']
+                total_amount += total_price
+                
+                tree.insert('', 'end', values=(
+                    component['component_name'],
+                    component['type_name'] or '-',
+                    component['manufacture_name'] or '-',
+                    f"{component['price']:.2f} руб.",
+                    component['quantity'],
+                    f"{total_price:.2f} руб."
+                ))
+            
+            ttk.Label(dialog, text=f'Общая сумма: {total_amount:.2f} руб.', style='Header.TLabel').pack(pady=10)
+    
+    def delete_configuration(self):
+        """Удаление конфигурации"""
+        selected = self.configurations_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите конфигурацию')
+            return
+        
+        item = selected[0]
+        config_id = self.configurations_tree.item(item)['values'][0]
+        config_name = self.configurations_tree.item(item)['values'][2]
+        
+        if messagebox.askyesno('Подтверждение', f'Удалить конфигурацию "{config_name}"?'):
+            data = self.make_api_request('/configurations/admin/delete_by_id/', method='DELETE',
+                                       params={'config_id': config_id})
+            if data:
+                messagebox.showinfo('Успех!', 'Конфигурация удалена')
+                self.load_configurations()
+    
+    def init_orders_tab(self):
+        """Вкладка управления заказами"""
+        main_frame = ttk.Frame(self.tab_orders)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        ttk.Label(main_frame, text='Управление заказами', style='Header.TLabel').pack(pady=10)
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+        
+        ttk.Button(button_frame, text='Обновить', 
+                  command=self.load_orders, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Изменить статус', 
+                  command=self.change_order_status, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Удалить', 
+                  command=self.delete_order, style='Accent.TButton').pack(side='left', padx=5)
+
+        columns = ('id', 'user', 'date', 'total', 'status')
+        self.orders_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
+        
+        self.orders_tree.heading('id', text='ID заказа')
+        self.orders_tree.heading('user', text='Пользователь')
+        self.orders_tree.heading('date', text='Дата')
+        self.orders_tree.heading('total', text='Сумма')
+        self.orders_tree.heading('status', text='Статус')
+        
+        self.orders_tree.column('id', width=80)
+        self.orders_tree.column('user', width=120)
+        self.orders_tree.column('date', width=100)
+        self.orders_tree.column('total', width=100)
+        self.orders_tree.column('status', width=120)
+        
+        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.orders_tree.yview)
+        self.orders_tree.configure(yscroll=scrollbar.set)
+        
+        self.orders_tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        self.load_orders()
+    
+    def load_orders(self):
+        """Загрузка списка заказов"""
+        data = self.make_api_request('/orders/admin/get_all')
+        if data:
+            for item in self.orders_tree.get_children():
+                self.orders_tree.delete(item)
+            
+            for order in data:
+                order_date = order.get('order_date', '')
+                if order_date:
+                    try:
+                        order_date = order_date.split('T')[0]
+                    except:
+                        pass
+                
+                total_amount = order.get('total_amount', 0)
+                total_text = f"{total_amount:.2f} руб." if total_amount else "0 руб."
+                
+                self.orders_tree.insert('', 'end', values=(
+                    order['id'],
+                    order['user_login'],
+                    order_date,
+                    total_text,
+                    order.get('status_name', 'Неизвестно')
+                ))
+    
+    def change_order_status(self):
+        """Изменение статуса заказа"""
+        selected = self.orders_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите заказ')
+            return
+        
+        item = selected[0]
+        order_id = self.orders_tree.item(item)['values'][0]
+        current_status = self.orders_tree.item(item)['values'][4]
+
+        statuses_data = self.make_api_request('/order_status/get_all/')
+        if not statuses_data:
+            return
+        
+        status_names = [status['name'] for status in statuses_data]
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title('Изменение статуса заказа')
+        dialog.geometry('300x150')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text=f'Заказ: #{order_id}').pack(pady=10)
+        ttk.Label(dialog, text=f'Текущий статус: {current_status}').pack(pady=5)
+        
+        status_var = tk.StringVar(value=current_status)
+        status_combo = ttk.Combobox(dialog, textvariable=status_var, state='readonly')
+        status_combo['values'] = status_names
+        status_combo.pack(pady=10)
+        
+        def save_status():
+            new_status = status_var.get()
+            if new_status == current_status:
+                messagebox.showinfo('Информация', 'Статус не изменен')
+                dialog.destroy()
+                return
+
+            status_id = None
+            for status in statuses_data:
+                if status['name'] == new_status:
+                    status_id = status['id']
+                    break
+            
+            if status_id is None:
+                messagebox.showerror('Ошибка!', 'Статус не найден')
+                return
+            
+            data = self.make_api_request('/orders/admin/edit_order_status/', method='PUT',
+                                       json_data={'status_id': status_id},
+                                       params={'order_id': order_id})
+            if data:
+                messagebox.showinfo('Успех!', 'Статус заказа изменен')
+                dialog.destroy()
+                self.load_orders()
+        
+        ttk.Button(dialog, text='Сохранить', command=save_status, style='Accent.TButton').pack(pady=10)
+    
+    def delete_order(self):
+        """Удаление заказа"""
+        selected = self.orders_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите заказ')
+            return
+        
+        item = selected[0]
+        order_id = self.orders_tree.item(item)['values'][0]
+        
+        if messagebox.askyesno('Подтверждение', f'Удалить заказ #{order_id}?'):
+            data = self.make_api_request('/orders/admin/delete_order/', method='DELETE',
+                                       params={'order_id': order_id})
+            if data:
+                messagebox.showinfo('Успех!', 'Заказ удален')
+                self.load_orders()
 
 class AuthApp:
     """Класс для создания окна авторизации пользователей"""
@@ -1297,8 +1993,8 @@ class AuthApp:
         
         self.bg_color = '#f5f5f5'
         self.fg_color = '#333333'
-        self.accent_color = "#5814ea"
-        self.button_fg = '#ffffff'
+        self.accent_color = "#000000"
+        self.button_fg = "#000000"
         self.entry_bg = '#ffffff'
         
         self.title_font = Font(family='Helvetica', size=30, weight='bold')
