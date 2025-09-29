@@ -1683,7 +1683,149 @@ class AdminApp:
             messagebox.showwarning('Внимание!', 'Выберите компонент')
             return
 
-        messagebox.showinfo('Информация', 'Функция редактирования в разработке')
+        item = selected[0]
+        component_id = self.components_tree.item(item)['values'][0]
+        current_data = None
+        for component in self.components_tree.get_children():
+            if self.components_tree.item(component)['values'][0] == component_id:
+                current_data = self.components_tree.item(component)['values']
+                break
+        
+        if not current_data:
+            messagebox.showerror('Ошибка!', 'Не удалось получить данные компонента')
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title('Редактирование компонента')
+        dialog.geometry('500x600')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text='Название:').grid(row=0, column=0, padx=10, pady=5, sticky='e')
+        name_entry = ttk.Entry(dialog, width=30)
+        name_entry.insert(0, current_data[1])
+        name_entry.grid(row=0, column=1, padx=10, pady=5)
+
+        ttk.Label(dialog, text='Тип:').grid(row=1, column=0, padx=10, pady=5, sticky='e')
+        type_entry = ttk.Entry(dialog, width=30)
+        type_entry.insert(0, current_data[2] if current_data[2] else '')
+        type_entry.grid(row=1, column=1, padx=10, pady=5)
+
+        ttk.Label(dialog, text='Производитель:').grid(row=2, column=0, padx=10, pady=5, sticky='e')
+        manufacture_entry = ttk.Entry(dialog, width=30)
+        manufacture_entry.insert(0, current_data[3] if current_data[3] else '')
+        manufacture_entry.grid(row=2, column=1, padx=10, pady=5)
+
+        ttk.Label(dialog, text='Цена:').grid(row=3, column=0, padx=10, pady=5, sticky='e')
+        price_entry = ttk.Entry(dialog, width=30)
+        price_entry.insert(0, str(current_data[4]))
+        price_entry.grid(row=3, column=1, padx=10, pady=5)
+
+        ttk.Label(dialog, text='Количество на складе:').grid(row=4, column=0, padx=10, pady=5, sticky='e')
+        stock_entry = ttk.Entry(dialog, width=30)
+        stock_entry.insert(0, str(current_data[5]))
+        stock_entry.grid(row=4, column=1, padx=10, pady=5)
+
+        spec_frame = ttk.LabelFrame(dialog, text='Спецификация (JSON)')
+        spec_frame.grid(row=5, column=0, columnspan=2, padx=10, pady=5, sticky='nsew')
+
+        ttk.Label(spec_frame, text='Формат: [{"key": "название", "value": "значение"}, ...] или {"ключ": "значение", ...}', 
+                font=('Arial', 8), foreground='gray').pack(anchor='w', padx=5, pady=2)
+        
+        spec_text = scrolledtext.ScrolledText(spec_frame, width=60, height=8)
+        spec_text.pack(fill='both', expand=True, padx=5, pady=5)
+
+        def load_component_details():
+            try:
+                headers = {'token': self.token}
+                response = requests.get(
+                    f'{self.base_url}/components/get_by_id/',
+                    headers=headers,
+                    params={'component_id': component_id}
+                )
+                
+                if response.status_code == 200:
+                    component_data = response.json()
+                    specification = component_data.get('specification', [])
+                    if specification:
+                        formatted_spec = json.dumps(specification, indent=2, ensure_ascii=False)
+                        spec_text.insert('1.0', formatted_spec)
+                else:
+                    messagebox.showerror('Ошибка!', 'Не удалось загрузить детали компонента')
+            except requests.exceptions.RequestException as e:
+                messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
+
+        load_component_details()
+
+        def validate_json(data):
+            """Валидация JSON данных"""
+            try:
+                parsed = json.loads(data)
+                if not isinstance(parsed, (dict, list)):
+                    return False, "JSON должен быть объектом или массивом"
+                return True, parsed
+            except json.JSONDecodeError as e:
+                return False, f"Ошибка JSON: {str(e)}"
+
+        def save_component():
+            name = name_entry.get().strip()
+            type_name = type_entry.get().strip()
+            manufacture_name = manufacture_entry.get().strip()
+            
+            if not name:
+                messagebox.showerror('Ошибка!', 'Введите название компонента')
+                return
+            
+            try:
+                price = float(price_entry.get())
+                stock_quantity = int(stock_entry.get())
+            except ValueError:
+                messagebox.showerror('Ошибка!', 'Цена и количество должны быть числами')
+                return
+
+            specification_text = spec_text.get('1.0', tk.END).strip()
+            specification = []
+            
+            if specification_text:
+                is_valid, result = validate_json(specification_text)
+                if not is_valid:
+                    messagebox.showerror('Ошибка!', result)
+                    return
+                specification = result
+
+            component_data = {
+                'new_name': name,
+                'type_name': type_name if type_name else None,
+                'manufacture_name': manufacture_name if manufacture_name else None,
+                'price': price,
+                'stock_quantity': stock_quantity,
+                'specification': specification
+            }
+
+            data = self.make_api_request('/components/edit_by_id/', method='PUT',
+                                    json_data=component_data,
+                                    params={'component_id': component_id})
+            if data:
+                messagebox.showinfo('Успех!', 'Компонент обновлен')
+                dialog.destroy()
+                self.load_components()
+
+        button_frame = ttk.Frame(dialog)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=20)
+
+        ttk.Button(button_frame, text='Сохранить', command=save_component, 
+                style='Accent.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy, 
+                style='Accent.TButton').pack(side='left', padx=10)
+
+        dialog.grid_rowconfigure(5, weight=1)
+        dialog.grid_columnconfigure(1, weight=1)
+
+        help_label = ttk.Label(dialog, 
+                            text='Подсказка: Используйте валидный JSON формат. Пример: [{"Сокет": "LGA 1700"}, {"Чипсет": "Intel Z690"}]',
+                            font=('Arial', 8),
+                            foreground='blue')
+        help_label.grid(row=7, column=0, columnspan=2, pady=5)
     
     def delete_component(self):
         """Удаление компонента"""
@@ -1926,7 +2068,7 @@ class AdminApp:
         
         dialog = tk.Toplevel(self.root)
         dialog.title('Изменение статуса заказа')
-        dialog.geometry('300x150')
+        dialog.geometry('400x200')
         dialog.transient(self.root)
         dialog.grab_set()
         
