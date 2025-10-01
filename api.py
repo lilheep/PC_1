@@ -132,6 +132,10 @@ class OrderConfigCreate(BaseModel):
 
 class OrderConfigUpdate(BaseModel):
     quantity: int
+
+class UserSearch(BaseModel):
+    email: str | None = None
+    phone: str | None = None
     
 @app.post('/users/register/', tags=['Users'])
 async def create_user(email: str, password: str, full_name: str, number_phone: str, address: str):
@@ -364,6 +368,41 @@ async def set_role_user(data: SetRoleRequest, token: str = Header(...)):
     
     except Exception as e:
         raise HTTPException(500, f'Ошибка при изменении роли пользователя: {e}')
+
+@app.post("/users/get_user_by_email_or_phone/", tags=['Users'])
+async def get_user_by_login(data: UserSearch, token: str = Header(...)):
+    """Для поиска админом конкретного пользователя"""
+    current_user = get_user_by_token(token, 'Администратор')
+    if not current_user:
+            raise HTTPException(401, 'Недействительный токен.')
+    
+    try:
+        if not data.email and not data.phone:
+            raise HTTPException(400, 'Введите email или номер телефона пользователя.')
+        
+        if data.email:
+            user = Users.select().where(Users.email==data.email).first()
+        elif data.phone:
+            user = Users.select().where(Users.phone==data.phone).first()
+        
+        if not user:
+            raise HTTPException(404, 'Пользователь не найден.')
+        
+        return {
+            'id': user.id,
+            'name': user.name,
+            'email': user.email,
+            'phone': user.phone,
+            'role': user.role_id.name,
+            'address': user.address   
+        }
+        
+    except HTTPException as http_exc:
+        raise http_exc    
+        
+    except Exception as e:
+        raise HTTPException(500, f'Не удалось подключиться к серверу: {e}')
+    
 
 @app.post('/manufactures/add_manufacture/', tags=['Manufactures'])
 async def create_manufactrue(name: str, token: str = Header(...)):
