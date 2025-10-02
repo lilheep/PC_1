@@ -263,6 +263,65 @@ async def confirm_change_password(email: str, code: str, new_password: str):
     
     return {'message': 'Пароль успешно обновлен.'}
 
+@app.post('/users/request_login_code/', tags=['Users'])
+async def request_login_code(email: str):
+    """Запрос кода для входа по email"""
+    if not re.fullmatch(EMAIL_REGEX, email):
+        raise HTTPException(400, 'Неверный формат email.')
+    
+    user = Users.select().where(Users.email==email).first()
+    if not user:
+        raise HTTPException(404, 'Пользователь с указанным email не найден.')
+    
+    code = generation_confirmation_code(length=6)
+    expires = datetime.datetime.now() + datetime.timedelta(minutes=10)
+
+    PasswordChangeRequest.create(
+        user=user.id,
+        code=code,
+        expires_at=expires
+    )
+    
+    send_email(
+        to_email=email,
+        subject='Код подтверждения для входа в ANTech',
+        body=f'Здравствуйте! \nВаш код подтверждения для входа: {code.upper()}. \nКод действителен 10 минут. \nЕсли это были не Вы, проигнорируйте данное сообщение.'
+    )
+    
+    return {'message': 'Код подтверждения успешно отправлен на указанную почту.'}
+
+@app.post('/users/confirm_login_code/', tags=['Users'])
+async def confirm_login_code(email: str, code: str):
+    """Подтверждение входа по коду"""
+    user = Users.select().where(Users.email==email).first()
+    if not user:
+        raise HTTPException(404, 'Пользователь с указанным email не найден.')
+
+    request = PasswordChangeRequest.select().where(
+        (PasswordChangeRequest.user==user.id) &
+        (PasswordChangeRequest.code==code.lower()) &
+        (PasswordChangeRequest.expires_at > datetime.datetime.now())
+    ).order_by(PasswordChangeRequest.created_at.desc()).first()
+    
+    if not request:
+        raise HTTPException(404, 'Неверный код подтверждения или срок его действия истек.')
+
+    token = str(uuid.uuid4())
+    expires_at = datetime.datetime.now() + datetime.timedelta(hours=1)
+    
+    UserToken.create(
+        user_id=user.id,
+        token=token,
+        expires_at=expires_at
+    )
+    request.delete_instance()
+    
+    return {
+        'message': 'Успешная авторизация!',
+        'token': token,
+        'expires_at': expires_at.isoformat()
+    }
+
 @app.get('/users/me/', tags=['Users'])
 async def get_profile(token: str = Header(...)):
     """Получение своей информации пользователем"""

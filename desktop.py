@@ -6,15 +6,446 @@ import os
 import re
 import json
 
-# os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
-# os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
+class ModernStyle:
+    def __init__(self):
+        self.primary_color = "#1e3d6d"
+        self.secondary_color = "#2d5ba9"
+        self.accent_color = "#40E0D0"
+        self.background_color = "#f0f2f5"
+        self.surface_color = "#ffffff"
+        self.text_primary = "#1a1a1a"
+        self.text_secondary = "#666666"
+        self.border_color = "#d1d5db"
+        self.success_color = "#10b981"
+        self.error_color = "#ef4444"
+        self.border_radius = 8
+
+class ModernAuthApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title('ANTech - Авторизация')
+        self.root.geometry('1920x1080')
+        self.root.state('zoomed')
+        self.style = ModernStyle()
+        self.setup_styles()
+        self.root.configure(bg=self.style.background_color)
+        self.main_frame = tk.Frame(self.root, bg=self.style.background_color)
+        self.main_frame.place(relx=0.5, rely=0.5, anchor='center')
+        self.create_auth_widgets()
+        self.base_url = 'http://127.0.0.1:8000'
+        self.token = None
+    
+    def setup_styles(self):
+        style = ttk.Style()
+        style.configure('Modern.TFrame', background=self.style.background_color)
+        style.configure('Auth.TFrame', background=self.style.surface_color)
+        style.configure('Primary.TButton', 
+                       background=self.style.primary_color,
+                       foreground='white',
+                       borderwidth=0,
+                       focuscolor='none',
+                       padding=(20, 10))
+        style.map('Primary.TButton',
+                 background=[('active', self.style.secondary_color),
+                           ('pressed', self.style.primary_color)])
+        style.configure('Secondary.TButton',
+                       background=self.style.surface_color,
+                       foreground=self.style.primary_color,
+                       borderwidth=1,
+                       padding=(20, 10))
+        style.map('Secondary.TButton',
+                 background=[('active', self.style.background_color)])
+        style.configure('Modern.TLabel',
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary,
+                       font=('Arial', 11))
+        style.configure('Title.TLabel',
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary,
+                       font=('Arial', 24, 'bold'))
+        style.configure('Subtitle.TLabel',
+                       background=self.style.surface_color,
+                       foreground=self.style.text_secondary,
+                       font=('Arial', 14))
+        style.configure('Modern.TEntry',
+                       fieldbackground=self.style.surface_color,
+                       foreground=self.style.text_primary,
+                       borderwidth=1,
+                       relief='solid',
+                       padding=(10, 8))
+        style.map('Modern.TEntry',
+                 fieldbackground=[('focus', self.style.surface_color)])
+    
+    def on_code_login_success(self, token, expires_at):
+        """Обработка успешного входа по коду"""
+        self.token = token
+        self.token_expires = expires_at
+        self.open_main_app()
+    
+    def show_code_login(self):
+        """Показывает окно входа по коду"""
+        CodeLoginWindow(self.root, self.style, self.base_url, self.on_code_login_success)
+    
+    def create_auth_widgets(self):
+        auth_container = ttk.Frame(self.main_frame, style='Auth.TFrame', padding=40)
+        auth_container.pack(padx=20, pady=20)
+        
+        ttk.Label(auth_container, text='Войти', style='Title.TLabel').pack(pady=(0, 10))
+        ttk.Label(auth_container, text='Войдите в свой аккаунт', style='Subtitle.TLabel').pack(pady=(0, 30))
+        
+        login_frame = ttk.Frame(auth_container, style='Auth.TFrame')
+        login_frame.pack(fill='x', pady=(0, 15))
+        
+        ttk.Label(login_frame, text='Телефон или e-mail', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.login_entry = ttk.Entry(login_frame, width=30, style='Modern.TEntry', font=('Arial', 12))
+        self.login_entry.pack(fill='x', ipady=8)
+        
+        password_frame = ttk.Frame(auth_container, style='Auth.TFrame')
+        password_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Label(password_frame, text='Введите пароль', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.password_entry = ttk.Entry(password_frame, width=30, show='*', style='Modern.TEntry', font=('Arial', 12))
+        self.password_entry.pack(fill='x', ipady=8)
+        
+        forgot_frame = ttk.Frame(auth_container, style='Auth.TFrame')
+        forgot_frame.pack(fill='x', pady=(0, 30))
+        
+        forgot_label = tk.Label(forgot_frame, text='Забыли пароль?', 
+                               bg=self.style.surface_color, fg=self.style.primary_color,
+                               font=('Arial', 11), cursor='hand2')
+        forgot_label.pack(anchor='e')
+        forgot_label.bind('<Button-1>', lambda e: self.show_forgot_password())
+        
+        login_btn = ttk.Button(auth_container, text='Войти', 
+                              command=self.login, style='Primary.TButton')
+        login_btn.pack(fill='x', pady=(0, 20))
+        
+        code_btn = ttk.Button(auth_container, text='Войти по коду',
+                             command=self.show_code_login, style='Secondary.TButton')
+        code_btn.pack(fill='x')
+        
+        register_btn = ttk.Button(auth_container, text='Зарегистрироваться',
+                                 command=self.show_registration, style='Secondary.TButton')
+        register_btn.pack(fill='x', pady=(10, 0))
+        
+        self.login_entry.bind('<Return>', lambda e: self.login())
+        self.password_entry.bind('<Return>', lambda e: self.login())
+    
+    def show_registration(self):
+        """Показывает окно регистрации"""
+        RegistrationWindow(self.root, self.style, self.base_url)
+    
+    def is_phone(self, text):
+        phone_pattern = r'^[\d\s\-\+\(\)]+$'
+        return bool(re.match(phone_pattern, text)) and len(text) >= 5
+        
+    def login(self):
+        login = self.login_entry.get().strip()
+        password = self.password_entry.get().strip()
+    
+        if not login or not password:
+            messagebox.showerror('Ошибка!', 'Заполните все поля.')
+            return
+            
+        try:
+            if self.is_phone(login):
+                auth_data = {'phone': login, 'password': password}
+            else:
+                auth_data = {'email': login, 'password': password}
+            
+            response = requests.post(
+                f'{self.base_url}/users/auth/',
+                json=auth_data
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                self.token = data.get('token')
+                self.token_expires = data.get('expires_at')
+                self.open_main_app()
+            else:
+                error = response.json().get('detail', 'Ошибка авторизации')
+                messagebox.showerror('Ошибка!', f'Ошибка авторизации: {error}')
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
+    
+    def open_main_app(self):
+        self.root.destroy()
+        root = tk.Tk()
+        MainApp(root, self.token)
+        root.mainloop()
+       
+    def show_forgot_password(self):
+        ForgotPasswordWindow(self.root, self.style)
+
+class ForgotPasswordWindow:
+    def __init__(self, parent, style):
+        self.style = style
+        self.window = tk.Toplevel(parent)
+        self.window.title('Восстановление пароля')
+        self.window.geometry('500x400')
+        self.window.configure(bg=self.style.background_color)
+        self.window.resizable(False, False)
+        self.window.transient(parent)
+        self.window.grab_set()
+        self.create_widgets()
+    
+    def create_widgets(self):
+        container = ttk.Frame(self.window, style='Auth.TFrame', padding=30)
+        container.pack(fill='both', expand=True, padx=20, pady=20)
+        
+        ttk.Label(container, text='Восстановление пароля', style='Title.TLabel').pack(pady=(0, 10))
+        ttk.Label(container, text='Введите email для восстановления доступа', 
+                 style='Subtitle.TLabel').pack(pady=(0, 30))
+        
+        email_frame = ttk.Frame(container, style='Auth.TFrame')
+        email_frame.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(email_frame, text='Email', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.email_entry = ttk.Entry(email_frame, style='Modern.TEntry', font=('Arial', 12))
+        self.email_entry.pack(fill='x', ipady=8)
+        
+        ttk.Button(container, text='Отправить код', 
+                  command=self.send_code, style='Primary.TButton').pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(container, text='Отмена', 
+                  command=self.window.destroy, style='Secondary.TButton').pack(fill='x')
+    
+    def send_code(self):
+        email = self.email_entry.get().strip()
+        if not email:
+            messagebox.showerror('Ошибка!', 'Введите email')
+            return
+        messagebox.showinfo('Успех!', f'Код восстановления отправлен на {email}')
+        self.window.destroy()
+
+class CodeLoginWindow:
+    def __init__(self, parent, style, base_url, on_success):
+        self.style = style
+        self.base_url = base_url
+        self.on_success = on_success
+        self.email = None
+        
+        self.window = tk.Toplevel(parent)
+        self.window.title('Вход по коду')
+        self.window.geometry('500x500')
+        self.window.configure(bg=self.style.background_color)
+        self.window.resizable(False, False)
+        self.window.transient(parent)
+        self.window.grab_set()
+        
+        self.create_email_step()
+    
+    def create_email_step(self):
+        """Ввод email"""
+        if hasattr(self, 'current_frame'):
+            self.current_frame.destroy()
+            
+        self.current_frame = ttk.Frame(self.window, style='Auth.TFrame', padding=30)
+        self.current_frame.pack(fill='both', expand=True)
+        
+        ttk.Label(self.current_frame, text='Вход по коду', style='Title.TLabel').pack(pady=(0, 10))
+        ttk.Label(self.current_frame, text='Введите email для получения кода подтверждения', 
+                 style='Subtitle.TLabel').pack(pady=(0, 30))
+        
+        email_frame = ttk.Frame(self.current_frame, style='Auth.TFrame')
+        email_frame.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(email_frame, text='Email', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.email_entry = ttk.Entry(email_frame, style='Modern.TEntry', font=('Arial', 12))
+        self.email_entry.pack(fill='x', ipady=8)
+        
+        ttk.Button(self.current_frame, text='Получить код', 
+                  command=self.send_code, style='Primary.TButton').pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(self.current_frame, text='Отмена', 
+                  command=self.window.destroy, style='Secondary.TButton').pack(fill='x')
+        
+        self.email_entry.bind('<Return>', lambda e: self.send_code())
+    
+    def create_code_step(self):
+        """Ввод кода"""
+        self.current_frame.destroy()
+        
+        self.current_frame = ttk.Frame(self.window, style='Auth.TFrame', padding=30)
+        self.current_frame.pack(fill='both', expand=True)
+        
+        ttk.Label(self.current_frame, text='Вход по коду', style='Title.TLabel').pack(pady=(0, 10))
+        ttk.Label(self.current_frame, text=f'Код отправлен на {self.email}', 
+                 style='Subtitle.TLabel').pack(pady=(0, 30))
+        
+        code_frame = ttk.Frame(self.current_frame, style='Auth.TFrame')
+        code_frame.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(code_frame, text='Код подтверждения', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.code_entry = ttk.Entry(code_frame, style='Modern.TEntry', font=('Arial', 12))
+        self.code_entry.pack(fill='x', ipady=8)
+        
+        ttk.Button(self.current_frame, text='Войти', 
+                  command=self.confirm_login, style='Primary.TButton').pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(self.current_frame, text='Назад', 
+                  command=self.create_email_step, style='Secondary.TButton').pack(fill='x')
+        
+        self.code_entry.bind('<Return>', lambda e: self.confirm_login())
+    
+    def send_code(self):
+        """Отправка кода на email"""
+        email = self.email_entry.get().strip()
+        
+        if not email:
+            messagebox.showerror('Ошибка!', 'Введите email')
+            return
+            
+        try:
+            response = requests.post(
+                f'{self.base_url}/users/request_login_code/',
+                params={'email': email}
+            )
+            
+            if response.status_code == 200:
+                self.email = email
+                self.create_code_step()
+            else:
+                error = response.json().get('detail', 'Ошибка отправки кода')
+                messagebox.showerror('Ошибка!', error)
+                
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
+    
+    def confirm_login(self):
+        """Подтверждение входа по коду"""
+        code = self.code_entry.get().strip()
+        
+        if not code:
+            messagebox.showerror('Ошибка!', 'Введите код подтверждения')
+            return
+            
+        try:
+            response = requests.post(
+                f'{self.base_url}/users/confirm_login_code/',
+                params={'email': self.email, 'code': code}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if self.window and self.window.winfo_exists():
+                    self.window.destroy()
+                self.on_success(data.get('token'), data.get('expires_at'))
+            else:
+                error = response.json().get('detail', 'Ошибка входа')
+                messagebox.showerror('Ошибка!', error)
+                
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
+
+class RegistrationWindow:
+    def __init__(self, parent, style, base_url):
+        self.style = style
+        self.base_url = base_url
+        
+        self.window = tk.Toplevel(parent)
+        self.window.title('Регистрация')
+        self.window.geometry('600x900')
+        self.window.configure(bg=self.style.background_color)
+        self.window.resizable(False, False)
+        self.window.transient(parent)
+        self.window.grab_set()
+        
+        self.create_widgets()
+    
+    def create_widgets(self):
+        container = ttk.Frame(self.window, style='Auth.TFrame', padding=30)
+        container.pack(fill='both', expand=True)
+        
+        ttk.Label(container, text='Регистрация', style='Title.TLabel').pack(pady=(0, 10))
+        ttk.Label(container, text='Создайте новый аккаунт', style='Subtitle.TLabel').pack(pady=(0, 30))
+        
+        name_frame = ttk.Frame(container, style='Auth.TFrame')
+        name_frame.pack(fill='x', pady=(0, 15))
+        ttk.Label(name_frame, text='ФИО', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.name_entry = ttk.Entry(name_frame, style='Modern.TEntry', font=('Arial', 12))
+        self.name_entry.pack(fill='x', ipady=8)
+        
+        email_frame = ttk.Frame(container, style='Auth.TFrame')
+        email_frame.pack(fill='x', pady=(0, 15))
+        ttk.Label(email_frame, text='Email', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.email_entry = ttk.Entry(email_frame, style='Modern.TEntry', font=('Arial', 12))
+        self.email_entry.pack(fill='x', ipady=8)
+        
+        phone_frame = ttk.Frame(container, style='Auth.TFrame')
+        phone_frame.pack(fill='x', pady=(0, 15))
+        ttk.Label(phone_frame, text='Телефон', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.phone_entry = ttk.Entry(phone_frame, style='Modern.TEntry', font=('Arial', 12))
+        self.phone_entry.pack(fill='x', ipady=8)
+        
+        password_frame = ttk.Frame(container, style='Auth.TFrame')
+        password_frame.pack(fill='x', pady=(0, 15))
+        ttk.Label(password_frame, text='Пароль', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.password_entry = ttk.Entry(password_frame, show='*', style='Modern.TEntry', font=('Arial', 12))
+        self.password_entry.pack(fill='x', ipady=8)
+        
+        address_frame = ttk.Frame(container, style='Auth.TFrame')
+        address_frame.pack(fill='x', pady=(0, 30))
+        ttk.Label(address_frame, text='Адрес', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.address_entry = ttk.Entry(address_frame, style='Modern.TEntry', font=('Arial', 12))
+        self.address_entry.pack(fill='x', ipady=8)
+        
+        register_btn = ttk.Button(container, text='Зарегистрироваться', 
+                                command=self.register, style='Primary.TButton')
+        register_btn.pack(fill='x', pady=(0, 20))
+        
+        cancel_btn = ttk.Button(container, text='Отмена', 
+                              command=self.window.destroy, style='Secondary.TButton')
+        cancel_btn.pack(fill='x')
+        
+        self.name_entry.bind('<Return>', lambda e: self.email_entry.focus())
+        self.email_entry.bind('<Return>', lambda e: self.phone_entry.focus())
+        self.phone_entry.bind('<Return>', lambda e: self.password_entry.focus())
+        self.password_entry.bind('<Return>', lambda e: self.address_entry.focus())
+        self.address_entry.bind('<Return>', lambda e: self.register())
+    
+    def register(self):
+        name = self.name_entry.get().strip()
+        email = self.email_entry.get().strip()
+        phone = self.phone_entry.get().strip()
+        password = self.password_entry.get().strip()
+        address = self.address_entry.get().strip()
+        
+        if not all([name, email, phone, password, address]):
+            messagebox.showerror('Ошибка!', 'Заполните все поля')
+            return
+            
+        try:
+            response = requests.post(
+                f'{self.base_url}/users/register/',
+                params={
+                    'email': email,
+                    'password': password,
+                    'full_name': name,
+                    'number_phone': phone,
+                    'address': address
+                }
+            )
+            
+            if response.status_code == 200:
+                messagebox.showinfo('Успех!', 'Регистрация прошла успешно!')
+                self.window.destroy()
+            else:
+                error = response.json().get('detail', 'Ошибка регистрации')
+                messagebox.showerror('Ошибка!', error)
+                
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
 
 class MainApp:
     def __init__(self, root, token):
         self.root = root
         self.root.title('ANTech - Конфигуратор ПК')
         self.root.state('zoomed')
-        self.root.configure(bg='#40E0D0')
+        self.style = ModernStyle()
+        self.setup_styles()
+        self.root.configure(bg=self.style.background_color)
         self.token = token
         self.user_data = None
         self.base_url = 'http://127.0.0.1:8000'
@@ -24,86 +455,108 @@ class MainApp:
             self.open_admin_app()
             return
          
-        self.style = ttk.Style()
-        
-        self.style.configure('Header.TLabel', 
-                           font=('Arial', 16, 'bold'),
-                           background='#40E0D0',
-                           foreground='black')
-        
-        self.style.configure('Normal.TLabel', 
-                           font=('Arial', 12),
-                           background='#40E0D0',
-                           foreground='black')
-        
-        self.style.configure('Accent.TButton', 
-                           font=('Arial', 12), 
-                           background='white',
-                           foreground='black',
-                           borderwidth=2,
-                           focuscolor='none')
-        
-        self.style.configure('TFrame', 
-                           background='#40E0D0')
-        
-        self.style.configure('TNotebook', 
-                           background='#40E0D0')
-        
-        self.style.configure('TNotebook.Tab', 
-                           background='white',
-                           foreground='black')
-        
-        self.style.configure('Treeview',
-                           background='white',
-                           foreground='black',
-                           fieldbackground='white')
-        
-        self.style.configure('Treeview.Heading',
-                           background='#40E0D0',
-                           foreground='black',
-                           font=('Arial', 10, 'bold'))
-        
-        self.style.configure('TEntry',
-                           fieldbackground='white',
-                           foreground='black')
-        
-        self.style.configure('TCombobox',
-                           fieldbackground='white',
-                           foreground='black')
-        
-        self.main_container = ttk.Frame(root, style='TFrame')
+        self.main_container = ttk.Frame(root, style='Modern.TFrame')
         self.main_container.pack(fill='both', expand=True)
         
-        self.header_frame = ttk.Frame(self.main_container, style='TFrame')
-        self.header_frame.pack(fill='x', pady=10)
-        
-        ttk.Label(self.header_frame, text=f'Добро пожаловать, {self.user_data["name"]}!', style='Header.TLabel').pack(side='left', padx=20)
-        ttk.Button(self.header_frame, text='Выход', command=self.logout, style='Accent.TButton').pack(side='right', padx=20)
-        
-        self.tab_control = ttk.Notebook(self.main_container)
-        
-        self.tab_catalog = ttk.Frame(self.tab_control, style='TFrame')
-        self.tab_configurations = ttk.Frame(self.tab_control, style='TFrame')
-        self.tab_orders = ttk.Frame(self.tab_control, style='TFrame')
-        self.tab_profile = ttk.Frame(self.tab_control, style='TFrame')
-        
-        self.tab_control.add(self.tab_catalog, text='Каталог компонентов')
-        self.tab_control.add(self.tab_configurations, text='Мои конфигурации')
-        self.tab_control.add(self.tab_orders, text='Мои заказы')
-        self.tab_control.add(self.tab_profile, text='Профиль')
-        
-        self.tab_control.pack(fill='both', expand=1)
+        self.create_header()
+        self.create_tabs()
         
         self.init_catalog_tab()
         self.init_configurations_tab()
         self.init_orders_tab()
         self.init_profile_tab()
     
-    def open_admin_app(self):
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        AdminApp(self.root, self.token)
+    def setup_styles(self):
+        style = ttk.Style()
+        style.configure('Modern.TFrame', background=self.style.background_color)
+        style.configure('Surface.TFrame', background=self.style.surface_color)
+        style.configure('Header.TLabel', 
+                       font=('Arial', 16, 'bold'),
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary)
+        style.configure('Normal.TLabel', 
+                       font=('Arial', 11),
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary)
+        style.configure('Secondary.TLabel',
+                       font=('Arial', 11),
+                       background=self.style.surface_color,
+                       foreground=self.style.text_secondary)
+        style.configure('Primary.TButton', 
+                       font=('Arial', 11), 
+                       background=self.style.primary_color,
+                       foreground='white',
+                       borderwidth=0,
+                       focuscolor='none')
+        style.map('Primary.TButton',
+                 background=[('active', self.style.secondary_color)])
+        style.configure('Secondary.TButton',
+                       font=('Arial', 11),
+                       background=self.style.surface_color,
+                       foreground=self.style.primary_color,
+                       borderwidth=1)
+        style.map('Secondary.TButton',
+                 background=[('active', self.style.background_color)])
+        style.configure('Modern.TNotebook', 
+                       background=self.style.background_color)
+        style.configure('Modern.TNotebook.Tab', 
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary,
+                       padding=(20, 10))
+        style.map('Modern.TNotebook.Tab',
+                 background=[('selected', self.style.primary_color),
+                           ('active', self.style.secondary_color)],
+                 foreground=[('selected', 'white')])
+        style.configure('Treeview',
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary,
+                       fieldbackground=self.style.surface_color,
+                       rowheight=25)
+        style.configure('Treeview.Heading',
+                       background=self.style.primary_color,
+                       foreground='white',
+                       font=('Arial', 10, 'bold'))
+        style.map('Treeview.Heading',
+                 background=[('active', self.style.secondary_color)])
+        style.configure('Modern.TEntry',
+                       fieldbackground=self.style.surface_color,
+                       foreground=self.style.text_primary,
+                       borderwidth=1,
+                       relief='solid')
+        style.configure('Modern.TCombobox',
+                       fieldbackground=self.style.surface_color,
+                       foreground=self.style.text_primary)
     
+    def create_header(self):
+        header_frame = ttk.Frame(self.main_container, style='Surface.TFrame', padding=20)
+        header_frame.pack(fill='x', padx=20, pady=10)
+        
+        title_frame = ttk.Frame(header_frame, style='Surface.TFrame')
+        title_frame.pack(side='left')
+        
+        ttk.Label(title_frame, text='ANTech', 
+                 style='Header.TLabel').pack(anchor='w')
+        ttk.Label(title_frame, text=f'Добро пожаловать, {self.user_data["name"]}!', 
+                 style='Secondary.TLabel').pack(anchor='w')
+        
+        ttk.Button(header_frame, text='Выход', 
+                  command=self.logout, style='Secondary.TButton').pack(side='right')
+    
+    def create_tabs(self):
+        tab_control = ttk.Notebook(self.main_container, style='Modern.TNotebook')
+        
+        self.tab_catalog = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
+        self.tab_configurations = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
+        self.tab_orders = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
+        self.tab_profile = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
+        
+        tab_control.add(self.tab_catalog, text='Каталог компонентов')
+        tab_control.add(self.tab_configurations, text='Мои конфигурации')
+        tab_control.add(self.tab_orders, text='Мои заказы')
+        tab_control.add(self.tab_profile, text='Профиль')
+        
+        tab_control.pack(fill='both', expand=True, padx=20, pady=10)
+
     def load_user_data(self):
         try:
             headers = {'token': self.token}
@@ -120,51 +573,78 @@ class MainApp:
     def logout(self):
         for widget in self.root.winfo_children():
             widget.destroy()
-        AuthApp(self.root)
-        
+        ModernAuthApp(self.root)
+    
+    def open_admin_app(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        AdminApp(self.root, self.token)
+    
     def init_catalog_tab(self):
-        ttk.Label(self.tab_catalog, text='Каталог компонентов', style='Header.TLabel').pack(pady=10)
-
-        filter_frame = ttk.Frame(self.tab_catalog, style='TFrame')
-        filter_frame.pack(fill='x', padx=10, pady=5)
-
-        ttk.Label(filter_frame, text='Тип:', style='Normal.TLabel').pack(side='left', padx=5)
+        ttk.Label(self.tab_catalog, text='Каталог компонентов', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
+        
+        filter_container = ttk.Frame(self.tab_catalog, style='Surface.TFrame', padding=15)
+        filter_container.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(filter_container, text='Фильтры', style='Normal.TLabel').pack(anchor='w', pady=(0, 10))
+        
+        filter_frame = ttk.Frame(filter_container, style='Surface.TFrame')
+        filter_frame.pack(fill='x')
+        
+        type_frame = ttk.Frame(filter_frame, style='Surface.TFrame')
+        type_frame.pack(side='left', padx=(0, 15))
+        ttk.Label(type_frame, text='Тип:', style='Secondary.TLabel').pack(anchor='w')
         self.type_filter = tk.StringVar()
-        self.type_combo = ttk.Combobox(filter_frame, textvariable=self.type_filter, state='readonly', width=15, style='TCombobox')
-        self.type_combo.pack(side='left', padx=5)
-
-        ttk.Label(filter_frame, text='Цена от:', style='Normal.TLabel').pack(side='left', padx=5)
+        self.type_combo = ttk.Combobox(type_frame, textvariable=self.type_filter, 
+                                      state='readonly', width=15, style='Modern.TCombobox')
+        self.type_combo.pack(pady=(5, 0))
+        
+        price_frame = ttk.Frame(filter_frame, style='Surface.TFrame')
+        price_frame.pack(side='left', padx=(0, 15))
+        ttk.Label(price_frame, text='Цена:', style='Secondary.TLabel').pack(anchor='w')
+        
+        price_subframe = ttk.Frame(price_frame, style='Surface.TFrame')
+        price_subframe.pack(pady=(5, 0))
+        
         self.min_price_filter = tk.StringVar()
-        min_price_entry = ttk.Entry(filter_frame, textvariable=self.min_price_filter, width=8, style='TEntry')
-        min_price_entry.pack(side='left', padx=2)
-        
-        ttk.Label(filter_frame, text='до:', style='Normal.TLabel').pack(side='left', padx=2)
+        min_price_entry = ttk.Entry(price_subframe, textvariable=self.min_price_filter, 
+                                   width=8, style='Modern.TEntry')
+        min_price_entry.pack(side='left')
+        ttk.Label(price_subframe, text='-', style='Secondary.TLabel').pack(side='left', padx=5)
         self.max_price_filter = tk.StringVar()
-        max_price_entry = ttk.Entry(filter_frame, textvariable=self.max_price_filter, width=8, style='TEntry')
-        max_price_entry.pack(side='left', padx=5)
- 
-        ttk.Button(filter_frame, text='✔️', 
-                command=self.apply_filters, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(filter_frame, text='🔄', 
-                command=self.reset_filters, style='Accent.TButton').pack(side='left', padx=5)
-     
-        search_frame = ttk.Frame(self.tab_catalog, style='TFrame')
-        search_frame.pack(fill='x', padx=10, pady=5)
+        max_price_entry = ttk.Entry(price_subframe, textvariable=self.max_price_filter, 
+                                   width=8, style='Modern.TEntry')
+        max_price_entry.pack(side='left')
         
-        ttk.Label(search_frame, text='Поиск:', style='Normal.TLabel').pack(side='left', padx=5)
+        button_frame = ttk.Frame(filter_frame, style='Surface.TFrame')
+        button_frame.pack(side='left', padx=(20, 0))
+        
+        ttk.Button(button_frame, text='Применить', 
+                  command=self.apply_filters, style='Primary.TButton').pack(side='left', padx=(0, 5))
+        ttk.Button(button_frame, text='Сбросить', 
+                  command=self.reset_filters, style='Secondary.TButton').pack(side='left')
+        
+        search_frame = ttk.Frame(self.tab_catalog, style='Surface.TFrame')
+        search_frame.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(search_frame, text='Поиск:', style='Secondary.TLabel').pack(anchor='w', pady=(0, 5))
+        
+        search_subframe = ttk.Frame(search_frame, style='Surface.TFrame')
+        search_subframe.pack(fill='x')
+        
         self.search_var = tk.StringVar()
-        search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40, style='TEntry')
-        search_entry.pack(side='left', padx=5)
+        search_entry = ttk.Entry(search_subframe, textvariable=self.search_var, 
+                                style='Modern.TEntry')
+        search_entry.pack(side='left', fill='x', expand=True, padx=(0, 10))
         
-        ttk.Button(search_frame, text='🔎', 
-                command=self.search_components, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(search_frame, text='🔄', 
-                command=self.clear_search, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(search_subframe, text='Найти', 
+                  command=self.search_components, style='Primary.TButton').pack(side='left')
         
-        ttk.Button(self.tab_catalog, text='Обновить', command=self.load_components, style='Accent.TButton').pack(pady=5)
+        table_frame = ttk.Frame(self.tab_catalog, style='Surface.TFrame')
+        table_frame.pack(fill='both', expand=True)
         
         columns = ('id', 'name', 'type', 'manufacture', 'price', 'stock')
-        self.tree = ttk.Treeview(self.tab_catalog, columns=columns, show='headings', height=20)
+        self.tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=15)
         
         self.tree.heading('id', text='ID')
         self.tree.heading('name', text='Название')
@@ -180,32 +660,31 @@ class MainApp:
         self.tree.column('price', width=100)
         self.tree.column('stock', width=100)
         
-        scrollbar = ttk.Scrollbar(self.tab_catalog, orient=tk.VERTICAL, command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscroll=scrollbar.set)
         
-        self.tree.pack(side='left', fill='both', expand=True, padx=10, pady=10)
+        self.tree.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
         
         self.tree.bind('<<TreeviewSelect>>', self.show_component_specification)
         
-        self.spec_frame = ttk.Frame(self.tab_catalog, style='TFrame')   
-        self.spec_frame.pack(fill='x', padx=10, pady=10)
-        ttk.Label(self.spec_frame, text='Характеристики:', style='Header.TLabel').pack(anchor='w')
+        spec_container = ttk.Frame(self.tab_catalog, style='Surface.TFrame', padding=15)
+        spec_container.pack(fill='x', pady=(20, 0))
         
-        self.spec_text = scrolledtext.ScrolledText(self.spec_frame, height=8, state='disabled',
-                                                bg='white', fg='black', font=('Arial', 10))
-        self.spec_text.pack(fill='x', pady=5)
+        ttk.Label(spec_container, text='Характеристики', style='Normal.TLabel').pack(anchor='w', pady=(0, 10))
         
-        search_entry.bind('<Return>', lambda event: self.search_components())
-
+        self.spec_text = scrolledtext.ScrolledText(spec_container, height=8, state='disabled',
+                                                  bg=self.style.surface_color, fg=self.style.text_primary, 
+                                                  font=('Arial', 10), wrap=tk.WORD)
+        self.spec_text.pack(fill='x')
+        
         self.all_components = []
         self.filtered_components = []
         self.available_types = set()
         
         self.load_components()
-        
+
     def load_components(self):
-        """Загрузка компонентов из API"""
         try:
             headers = {'token': self.token}
             response = requests.get(f'{self.base_url}/components/get_all/', headers=headers)
@@ -234,7 +713,6 @@ class MainApp:
             messagebox.showerror('Ошибка!', f'Не удалось получить данные от сервера: {e}')
     
     def apply_filters(self):
-        """Применение фильтров к каталогу компонентов"""
         if not hasattr(self, 'all_components') or not self.all_components:
             return
         
@@ -272,7 +750,6 @@ class MainApp:
         self.display_filtered_components()
 
     def reset_filters(self):
-        """Сброс фильтров"""
         self.type_filter.set('')
         self.min_price_filter.set('')
         self.max_price_filter.set('')
@@ -281,7 +758,6 @@ class MainApp:
         self.display_filtered_components()
 
     def display_filtered_components(self):
-        """Отображение отфильтрованных компонентов"""
         for item in self.tree.get_children():
             self.tree.delete(item)
         
@@ -296,19 +772,16 @@ class MainApp:
             ))
     
     def search_components(self):
-        """Поиск компонентов по названию, типу или производителю"""
         self.apply_filters()
         
         if self.search_var.get().strip():
             messagebox.showinfo('Поиск', f'Найдено компонентов: {len(self.filtered_components)}')
 
     def clear_search(self):
-        """Сброс поиска и отображение всех компонентов"""
         self.search_var.set('')
         self.apply_filters()
 
     def update_components_table(self, components):
-        """Обновление таблицы с компонентами"""
         for item in self.tree.get_children():
             self.tree.delete(item)
 
@@ -325,7 +798,6 @@ class MainApp:
         self.filtered_components_data = components
     
     def show_component_specification(self, event):
-        """Отображение выбранного элемента"""
         selected_item = self.tree.selection()
         if not selected_item:
             return
@@ -355,27 +827,27 @@ class MainApp:
         self.spec_text.config(state='disabled')
     
     def init_configurations_tab(self):
-        main_frame = ttk.Frame(self.tab_configurations, style='TFrame')
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
-        ttk.Label(main_frame, text='Мои конфигурации ПК', style='Header.TLabel').pack(pady=10)
+        main_frame = ttk.Frame(self.tab_configurations, style='Surface.TFrame')
+        main_frame.pack(fill='both', expand=True)
+        ttk.Label(main_frame, text='Мои конфигурации ПК', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
 
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill='x', pady=10)
+        button_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        button_frame.pack(fill='x', pady=(0, 20))
         
-        ttk.Button(button_frame, text='➕', 
-                command=self.create_new_configuration, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='🔄', 
-                command=self.load_configurations, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='❌', 
-                command=self.delete_configuration, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Создать новую', 
+                command=self.create_new_configuration, style='Primary.TButton').pack(side='left', padx=(0, 10))
+        ttk.Button(button_frame, text='Обновить', 
+                command=self.load_configurations, style='Secondary.TButton').pack(side='left', padx=(0, 10))
+        ttk.Button(button_frame, text='Удалить', 
+                command=self.delete_configuration, style='Secondary.TButton').pack(side='left')
 
         paned_window = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
         paned_window.pack(fill='both', expand=True, pady=10)
 
-        left_frame = ttk.Frame(paned_window, style='TFrame')
+        left_frame = ttk.Frame(paned_window, style='Surface.TFrame', padding=10)
         paned_window.add(left_frame, weight=1)
         
-        ttk.Label(left_frame, text='Мои конфигурации:', style='Normal.TLabel').pack(anchor='w', pady=5)
+        ttk.Label(left_frame, text='Мои конфигурации:', style='Normal.TLabel').pack(anchor='w', pady=(0, 10))
 
         columns = ('id', 'name', 'description', 'created')
         self.config_tree = ttk.Treeview(left_frame, columns=columns, show='headings', height=15)
@@ -396,10 +868,10 @@ class MainApp:
         self.config_tree.pack(side='left', fill='both', expand=True)
         scrollbar_left.pack(side='right', fill='y')
 
-        right_frame = ttk.Frame(paned_window, style='TFrame')
+        right_frame = ttk.Frame(paned_window, style='Surface.TFrame', padding=10)
         paned_window.add(right_frame, weight=2)
         
-        ttk.Label(right_frame, text='Сборка конфигурации:', style='Normal.TLabel').pack(anchor='w', pady=5)
+        ttk.Label(right_frame, text='Сборка конфигурации:', style='Normal.TLabel').pack(anchor='w', pady=(0, 10))
 
         config_columns = ('type', 'component', 'price', 'quantity', 'total')
         self.config_components_tree = ttk.Treeview(right_frame, columns=config_columns, show='headings', height=10)
@@ -422,21 +894,21 @@ class MainApp:
         self.config_components_tree.pack(fill='both', expand=True)
         scrollbar_right.pack(side='right', fill='y')
 
-        bottom_frame = ttk.Frame(right_frame, style='TFrame')
+        bottom_frame = ttk.Frame(right_frame, style='Surface.TFrame')
         bottom_frame.pack(fill='x', pady=10)
         
         self.total_label = ttk.Label(bottom_frame, text='Общая сумма: 0 руб.', style='Header.TLabel')
         self.total_label.pack(side='left', padx=10)
 
-        manage_frame = ttk.Frame(bottom_frame, style='TFrame')
+        manage_frame = ttk.Frame(bottom_frame, style='Surface.TFrame')
         manage_frame.pack(side='right', padx=10)
         
-        ttk.Button(manage_frame, text='➕', 
-                command=self.add_component_to_config, style='Accent.TButton').pack(side='left', padx=2)
-        ttk.Button(manage_frame, text='❌', 
-                command=self.remove_component_from_config, style='Accent.TButton').pack(side='left', padx=2)
+        ttk.Button(manage_frame, text='Добавить компонент', 
+                command=self.add_component_to_config, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(manage_frame, text='Удалить компонент', 
+                command=self.remove_component_from_config, style='Secondary.TButton').pack(side='left', padx=5)
         ttk.Button(manage_frame, text='Создать заказ', 
-                command=self.create_order_from_config, style='Accent.TButton').pack(side='left', padx=2)
+                command=self.create_order_from_config, style='Primary.TButton').pack(side='left', padx=5)
 
         self.config_tree.bind('<<TreeviewSelect>>', self.on_configuration_select)
         self.config_components_tree.bind('<<TreeviewSelect>>', self.on_component_select)
@@ -529,17 +1001,20 @@ class MainApp:
         dialog = tk.Toplevel(self.root)
         dialog.title('Создание новой конфигурации')
         dialog.geometry('500x300')
-        dialog.configure(bg='#40E0D0')
+        dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
         
-        ttk.Label(dialog, text='Название конфигурации:', style='Normal.TLabel').pack(pady=10)
-        name_entry = ttk.Entry(dialog, width=40, style='TEntry')
-        name_entry.pack(pady=5)
+        content_frame = ttk.Frame(dialog, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
         
-        ttk.Label(dialog, text='Описание (необязательно):', style='Normal.TLabel').pack(pady=10)
-        desc_entry = ttk.Entry(dialog, width=40, style='TEntry')
-        desc_entry.pack(pady=5)
+        ttk.Label(content_frame, text='Название конфигурации:', style='Normal.TLabel').pack(anchor='w', pady=5)
+        name_entry = ttk.Entry(content_frame, width=40, style='Modern.TEntry')
+        name_entry.pack(fill='x', pady=5)
+        
+        ttk.Label(content_frame, text='Описание (необязательно):', style='Normal.TLabel').pack(anchor='w', pady=5)
+        desc_entry = ttk.Entry(content_frame, width=40, style='Modern.TEntry')
+        desc_entry.pack(fill='x', pady=5)
         
         def create_config():
             name = name_entry.get().strip()
@@ -567,11 +1042,11 @@ class MainApp:
             except requests.exceptions.RequestException as e:
                 messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
         
-        button_frame = ttk.Frame(dialog, style='TFrame')
+        button_frame = ttk.Frame(content_frame, style='Surface.TFrame')
         button_frame.pack(pady=20)
         
-        ttk.Button(button_frame, text='✔️', command=create_config, style='Accent.TButton').pack(side='left', padx=10)
-        ttk.Button(button_frame, text='❌', command=dialog.destroy, style='Accent.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Создать', command=create_config, style='Primary.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
 
     def add_component_to_config(self):
         if not hasattr(self, 'current_config_id') or not self.current_config_id:
@@ -585,18 +1060,21 @@ class MainApp:
         dialog = tk.Toplevel(self.root)
         dialog.title('Добавление компонента')
         dialog.geometry('600x400')
-        dialog.configure(bg='#40E0D0')
+        dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
         
-        ttk.Label(dialog, text='Выберите компонент:', style='Normal.TLabel').pack(pady=10)
-
-        filter_frame = ttk.Frame(dialog, style='TFrame')
-        filter_frame.pack(fill='x', padx=10, pady=5)
+        content_frame = ttk.Frame(dialog, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
         
-        ttk.Label(filter_frame, text='Фильтр по типу:', style='Normal.TLabel').pack(side='left')
+        ttk.Label(content_frame, text='Выберите компонент:', style='Normal.TLabel').pack(anchor='w', pady=(0, 10))
+
+        filter_frame = ttk.Frame(content_frame, style='Surface.TFrame')
+        filter_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Label(filter_frame, text='Фильтр по типу:', style='Secondary.TLabel').pack(side='left')
         type_var = tk.StringVar()
-        type_combo = ttk.Combobox(filter_frame, textvariable=type_var, style='TCombobox')
+        type_combo = ttk.Combobox(filter_frame, textvariable=type_var, style='Modern.TCombobox')
 
         types = list(set(comp['type_name'] for comp in self.all_components if comp['type_name']))
         type_combo['values'] = ['Все'] + types
@@ -604,7 +1082,7 @@ class MainApp:
         type_combo.pack(side='left', padx=5)
 
         columns = ('name', 'type', 'manufacture', 'price', 'stock')
-        comp_tree = ttk.Treeview(dialog, columns=columns, show='headings', height=10)
+        comp_tree = ttk.Treeview(content_frame, columns=columns, show='headings', height=10)
         
         comp_tree.heading('name', text='Название')
         comp_tree.heading('type', text='Тип')
@@ -618,18 +1096,18 @@ class MainApp:
         comp_tree.column('price', width=80)
         comp_tree.column('stock', width=60)
         
-        scrollbar = ttk.Scrollbar(dialog, orient=tk.VERTICAL, command=comp_tree.yview)
+        scrollbar = ttk.Scrollbar(content_frame, orient=tk.VERTICAL, command=comp_tree.yview)
         comp_tree.configure(yscroll=scrollbar.set)
         
-        comp_tree.pack(fill='both', expand=True, padx=10, pady=5)
+        comp_tree.pack(fill='both', expand=True, pady=5)
         scrollbar.pack(side='right', fill='y')
 
-        quantity_frame = ttk.Frame(dialog, style='TFrame')
-        quantity_frame.pack(fill='x', padx=10, pady=5)
+        quantity_frame = ttk.Frame(content_frame, style='Surface.TFrame')
+        quantity_frame.pack(fill='x', pady=10)
         
         ttk.Label(quantity_frame, text='Количество:', style='Normal.TLabel').pack(side='left')
         quantity_var = tk.IntVar(value=1)
-        quantity_spin = ttk.Spinbox(quantity_frame, from_=1, to=100, textvariable=quantity_var, width=10, style='TEntry')
+        quantity_spin = ttk.Spinbox(quantity_frame, from_=1, to=100, textvariable=quantity_var, width=10, style='Modern.TEntry')
         quantity_spin.pack(side='left', padx=5)
         
         def filter_components():
@@ -679,12 +1157,12 @@ class MainApp:
 
         type_combo.bind('<<ComboboxSelected>>', lambda e: filter_components())
         
-        button_frame = ttk.Frame(dialog, style='TFrame')
+        button_frame = ttk.Frame(content_frame, style='Surface.TFrame')
         button_frame.pack(pady=10)
         
-        ttk.Button(button_frame, text='➕', command=add_selected_component, 
-                style='Accent.TButton').pack(side='left', padx=10)
-        ttk.Button(button_frame, text='❌', command=dialog.destroy, style='Accent.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Добавить', command=add_selected_component, 
+                style='Primary.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
 
     def remove_component_from_config(self):
         if not hasattr(self, 'current_config_id') or not self.current_config_id:
@@ -719,14 +1197,17 @@ class MainApp:
         dialog = tk.Toplevel(self.root)
         dialog.title('Создание заказа')
         dialog.geometry('300x150')
-        dialog.configure(bg='#40E0D0')
+        dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
         
-        ttk.Label(dialog, text='Количество конфигураций:', style='Normal.TLabel').pack(pady=10)
+        content_frame = ttk.Frame(dialog, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
+        
+        ttk.Label(content_frame, text='Количество конфигураций:', style='Normal.TLabel').pack(anchor='w', pady=5)
         quantity_var = tk.IntVar(value=1)
-        quantity_spin = ttk.Spinbox(dialog, from_=1, to=100, textvariable=quantity_var, width=10, style='TEntry')
-        quantity_spin.pack(pady=5)
+        quantity_spin = ttk.Spinbox(content_frame, from_=1, to=100, textvariable=quantity_var, width=10, style='Modern.TEntry')
+        quantity_spin.pack(fill='x', pady=5)
         
         def create_order():
             quantity = quantity_var.get()
@@ -752,12 +1233,12 @@ class MainApp:
             except requests.exceptions.RequestException as e:
                 messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
         
-        button_frame = ttk.Frame(dialog, style='TFrame')
+        button_frame = ttk.Frame(content_frame, style='Surface.TFrame')
         button_frame.pack(pady=20)
         
-        ttk.Button(button_frame, text='➕', command=create_order, 
-                style='Accent.TButton').pack(side='left', padx=10)
-        ttk.Button(button_frame, text='❌', command=dialog.destroy, style='Accent.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Создать заказ', command=create_order, 
+                style='Primary.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
 
     def delete_configuration(self):
         if not hasattr(self, 'current_config_id') or not self.current_config_id:
@@ -789,24 +1270,24 @@ class MainApp:
                 messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
         
     def init_orders_tab(self):
-        main_frame = ttk.Frame(self.tab_orders, style='TFrame')
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        main_frame = ttk.Frame(self.tab_orders, style='Surface.TFrame')
+        main_frame.pack(fill='both', expand=True)
         
-        ttk.Label(main_frame, text='Мои заказы', style='Header.TLabel').pack(pady=10)
+        ttk.Label(main_frame, text='Мои заказы', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
 
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill='x', pady=10)
+        button_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        button_frame.pack(fill='x', pady=(0, 20))
         
-        ttk.Button(button_frame, text='🔄', 
-                command=self.load_orders, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Обновить', 
+                command=self.load_orders, style='Secondary.TButton').pack(side='left')
 
         paned_window = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
         paned_window.pack(fill='both', expand=True, pady=10)
 
-        left_frame = ttk.Frame(paned_window, style='TFrame')
+        left_frame = ttk.Frame(paned_window, style='Surface.TFrame', padding=10)
         paned_window.add(left_frame, weight=1)
         
-        ttk.Label(left_frame, text='Список заказов:', style='Normal.TLabel').pack(anchor='w', pady=5)
+        ttk.Label(left_frame, text='Список заказов:', style='Normal.TLabel').pack(anchor='w', pady=(0, 10))
 
         columns = ('id', 'date', 'total', 'status')
         self.orders_tree = ttk.Treeview(left_frame, columns=columns, show='headings', height=15)
@@ -827,10 +1308,10 @@ class MainApp:
         self.orders_tree.pack(side='left', fill='both', expand=True)
         scrollbar_left.pack(side='right', fill='y')
 
-        right_frame = ttk.Frame(paned_window, style='TFrame')
+        right_frame = ttk.Frame(paned_window, style='Surface.TFrame', padding=10)
         paned_window.add(right_frame, weight=2)
         
-        ttk.Label(right_frame, text='Детали заказа:', style='Normal.TLabel').pack(anchor='w', pady=5)
+        ttk.Label(right_frame, text='Детали заказа:', style='Normal.TLabel').pack(anchor='w', pady=(0, 10))
 
         order_columns = ('config_name', 'quantity', 'price', 'total')
         self.order_details_tree = ttk.Treeview(right_frame, columns=order_columns, show='headings', height=10)
@@ -851,20 +1332,20 @@ class MainApp:
         self.order_details_tree.pack(fill='both', expand=True)
         scrollbar_right.pack(side='right', fill='y')
 
-        info_frame = ttk.Frame(right_frame, style='TFrame')
+        info_frame = ttk.Frame(right_frame, style='Surface.TFrame')
         info_frame.pack(fill='x', pady=10)
         
-        button_frame_right = ttk.Frame(right_frame, style='TFrame')
+        button_frame_right = ttk.Frame(right_frame, style='Surface.TFrame')
         button_frame_right.pack(fill='x', pady=10)
         
         ttk.Button(button_frame_right, text='Оплатить',
-                   command=self.pay_selected_order, style='Accent.TButton').pack(side='right', padx=10)
+                   command=self.pay_selected_order, style='Primary.TButton').pack(side='right', padx=10)
         
-        ttk.Button(button_frame_right, text='❌', 
-                command=self.cancel_selected_order, style='Accent.TButton').pack(side='right', padx=10)
+        ttk.Button(button_frame_right, text='Отменить заказ', 
+                command=self.cancel_selected_order, style='Secondary.TButton').pack(side='right', padx=10)
         
         self.order_info_label = ttk.Label(info_frame, text='Выберите заказ для просмотра деталей', 
-                                        style='Normal.TLabel')
+                                        style='Secondary.TLabel')
         self.order_info_label.pack(anchor='w', padx=10)
 
         self.orders_tree.bind('<<TreeviewSelect>>', self.on_order_select)
@@ -890,7 +1371,7 @@ class MainApp:
         pay_window.title('Оплата заказа')
         pay_window.geometry('800x800')
         pay_window.resizable(False, False)
-        pay_window.configure(bg='#40E0D0')
+        pay_window.configure(bg=self.style.background_color)
         pay_window.transient(self.root)
         pay_window.grab_set()
 
@@ -903,91 +1384,94 @@ class MainApp:
         card_font = ('Arial', 16, 'bold')
         card_small_font = ('Arial', 10)
 
-        ttk.Label(pay_window, text='Оплата заказа', font=title_font, 
-                background='#40E0D0', foreground='black').pack(pady=20)
+        content_frame = ttk.Frame(pay_window, style='Surface.TFrame', padding=30)
+        content_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        ttk.Label(content_frame, text='Оплата заказа', font=title_font, 
+                background=self.style.surface_color, foreground=self.style.text_primary).pack(pady=20)
  
-        ttk.Label(pay_window, text=f'Заказ №{order_id}', font=('Arial', 14), 
-                background='#40E0D0', foreground='#27ae60').pack(pady=5)
-        ttk.Label(pay_window, text=f'Сумма: {order_total}', font=('Arial', 12), 
-                background='#40E0D0', foreground='black').pack(pady=5)
+        ttk.Label(content_frame, text=f'Заказ №{order_id}', font=('Arial', 14), 
+                background=self.style.surface_color, foreground=self.style.success_color).pack(pady=5)
+        ttk.Label(content_frame, text=f'Сумма: {order_total}', font=('Arial', 12), 
+                background=self.style.surface_color, foreground=self.style.text_primary).pack(pady=5)
         
-        card_frame = tk.Frame(pay_window, bg='#27ae60', bd=2, relief='raised', 
+        card_frame = tk.Frame(content_frame, bg=self.style.primary_color, bd=2, relief='raised', 
                             width=400, height=220)
         card_frame.pack(pady=20, padx=50, fill='both')
         card_frame.pack_propagate(False)
 
         tk.Label(card_frame, text='МИР', font=('Arial', 24, 'bold'), 
-                bg='#27ae60', fg='white').place(x=610, y=20)
+                bg=self.style.primary_color, fg='white').place(x=610, y=20)
 
         tk.Label(card_frame, text='Номер карты', font=card_small_font, 
-                bg='#27ae60', fg='#ecf0f1', anchor='w').place(x=30, y=80)
+                bg=self.style.primary_color, fg='#ecf0f1', anchor='w').place(x=30, y=80)
         card_display = tk.Label(card_frame, text='**** **** **** ****', 
-                            font=card_font, bg='#27ae60', fg='white')
+                            font=card_font, bg=self.style.primary_color, fg='white')
         card_display.place(x=30, y=100)
 
         tk.Label(card_frame, text='Срок действия', font=card_small_font, 
-                bg='#27ae60', fg='#ecf0f1').place(x=30, y=150)
+                bg=self.style.primary_color, fg='#ecf0f1').place(x=30, y=150)
         tk.Label(card_frame, text='MM / ГГ', font=('Arial', 12), 
-                bg='#27ae60', fg='white').place(x=30, y=170)
+                bg=self.style.primary_color, fg='white').place(x=30, y=170)
         
         tk.Label(card_frame, text='CVC / CVV', font=card_small_font, 
-                bg='#27ae60', fg='#ecf0f1').place(x=150, y=150)
+                bg=self.style.primary_color, fg='#ecf0f1').place(x=150, y=150)
         tk.Label(card_frame, text='***', font=('Arial', 12), 
-                bg='#27ae60', fg='white').place(x=150, y=170)
+                bg=self.style.primary_color, fg='white').place(x=150, y=170)
 
-        form_frame = tk.Frame(pay_window, bg='#40E0D0')
+        form_frame = tk.Frame(content_frame, bg=self.style.surface_color)
         form_frame.pack(pady=20, padx=50, fill='both')
 
         ttk.Label(form_frame, text='Номер карты:', font=label_font, 
-                background='#40E0D0', foreground='black').pack(anchor='w', pady=5)
+                background=self.style.surface_color, foreground=self.style.text_primary).pack(anchor='w', pady=5)
         
         card_number_var = tk.StringVar()
         card_number_entry = ttk.Entry(form_frame, textvariable=card_number_var, 
-                                    font=entry_font, width=25, style='TEntry')
+                                    font=entry_font, width=25, style='Modern.TEntry')
         card_number_entry.pack(fill='x', pady=5)
 
-        expiry_cvc_frame = tk.Frame(form_frame, bg='#40E0D0')
+        expiry_cvc_frame = tk.Frame(form_frame, bg=self.style.surface_color)
         expiry_cvc_frame.pack(fill='x', pady=10)
 
-        expiry_frame = tk.Frame(expiry_cvc_frame, bg='#40E0D0')
+        expiry_frame = tk.Frame(expiry_cvc_frame, bg=self.style.surface_color)
         expiry_frame.pack(side='left', padx=(0, 20))
         
         ttk.Label(expiry_frame, text='Срок действия (ММ/ГГ):', font=label_font, 
-                background='#40E0D0', foreground='black').pack(anchor='w')
+                background=self.style.surface_color, foreground=self.style.text_primary).pack(anchor='w')
         
-        expiry_subframe = tk.Frame(expiry_frame, bg='#40E0D0')
+        expiry_subframe = tk.Frame(expiry_frame, bg=self.style.surface_color)
         expiry_subframe.pack(fill='x', pady=5)
         
         month_var = tk.StringVar()
         month_entry = ttk.Entry(expiry_subframe, textvariable=month_var, 
-                            font=entry_font, width=5, style='TEntry')
+                            font=entry_font, width=5, style='Modern.TEntry')
         month_entry.pack(side='left', padx=(0, 5))
         
         ttk.Label(expiry_subframe, text='/', font=entry_font, 
-                background='#40E0D0', foreground='black').pack(side='left')
+                background=self.style.surface_color, foreground=self.style.text_primary).pack(side='left')
         
         year_var = tk.StringVar()
         year_entry = ttk.Entry(expiry_subframe, textvariable=year_var, 
-                            font=entry_font, width=5, style='TEntry')
+                            font=entry_font, width=5, style='Modern.TEntry')
         year_entry.pack(side='left', padx=(5, 0))
  
-        cvc_frame = tk.Frame(expiry_cvc_frame, bg='#40E0D0')
+        cvc_frame = tk.Frame(expiry_cvc_frame, bg=self.style.surface_color)
         cvc_frame.pack(side='left')
         
         ttk.Label(cvc_frame, text='CVC/CVV код:', font=label_font, 
-                background='#40E0D0', foreground='black').pack(anchor='w')
+                background=self.style.surface_color, foreground=self.style.text_primary).pack(anchor='w')
         
         cvc_var = tk.StringVar()
         cvc_entry = ttk.Entry(cvc_frame, textvariable=cvc_var, 
-                            font=entry_font, width=8, show='*', style='TEntry')
+                            font=entry_font, width=8, show='*', style='Modern.TEntry')
         cvc_entry.pack(fill='x', pady=5)
 
         ttk.Label(form_frame, text='Имя владельца карты:', font=label_font, 
-                background='#40E0D0', foreground='black').pack(anchor='w', pady=5)
+                background=self.style.surface_color, foreground=self.style.text_primary).pack(anchor='w', pady=5)
         
         name_var = tk.StringVar()
         name_entry = ttk.Entry(form_frame, textvariable=name_var, 
-                            font=entry_font, width=25, style='TEntry')
+                            font=entry_font, width=25, style='Modern.TEntry')
         name_entry.pack(fill='x', pady=5)
 
         def update_card_display(*args):
@@ -1054,7 +1538,7 @@ class MainApp:
         year_var.trace('w', lambda *args: validate_year())
         cvc_var.trace('w', lambda *args: validate_cvc())
 
-        button_frame = tk.Frame(pay_window, bg='#40E0D0')
+        button_frame = tk.Frame(content_frame, bg=self.style.surface_color)
         button_frame.pack(pady=20)
         
         def process_payment():
@@ -1111,27 +1595,24 @@ class MainApp:
             except requests.exceptions.RequestException as e:
                 messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
         
-        style = ttk.Style()
-        style.configure('Payment.TButton', font=button_font, padding=10, background='white', foreground='black')
-        
         ttk.Button(button_frame, text='Оплатить', 
-                command=process_payment, style='Payment.TButton').pack(side='left', padx=10)
+                command=process_payment, style='Primary.TButton').pack(side='left', padx=10)
         
-        ttk.Button(button_frame, text='❌', 
-                command=pay_window.destroy, style='Payment.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', 
+                command=pay_window.destroy, style='Secondary.TButton').pack(side='left', padx=10)
 
         card_number_entry.focus()
 
         expiry_display = tk.Label(card_frame, text='MM / ГГ', font=('Arial', 12), 
-                                bg='#27ae60', fg='white')
+                                bg=self.style.primary_color, fg='white')
         expiry_display.place(x=30, y=170)
         
         cvc_display = tk.Label(card_frame, text='***', font=('Arial', 12), 
-                            bg='#27ae60', fg='white')
+                            bg=self.style.primary_color, fg='white')
         cvc_display.place(x=150, y=170)
         
         name_display = tk.Label(card_frame, text='ВЛАДЕЛЕЦ КАРТЫ', font=('Arial', 10), 
-                            bg='#27ae60', fg='white')
+                            bg=self.style.primary_color, fg='white')
         name_display.place(x=30, y=190)
 
         def update_expiry_display(*args):
@@ -1258,12 +1739,12 @@ class MainApp:
             ))
         
     def init_profile_tab(self):
-        profile_frame = ttk.Frame(self.tab_profile, style='TFrame')
-        profile_frame.pack(fill='both', padx=10, pady=10)
+        profile_frame = ttk.Frame(self.tab_profile, style='Surface.TFrame')
+        profile_frame.pack(fill='both', expand=True)
         
-        ttk.Label(profile_frame, text='Мой профиль', style='Header.TLabel').pack(pady=20)
+        ttk.Label(profile_frame, text='Мой профиль', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
         
-        info_frame = ttk.LabelFrame(profile_frame, style='TFrame')
+        info_frame = ttk.LabelFrame(profile_frame, text='Информация о профиле', style='Surface.TFrame', padding=20)
         info_frame.pack(fill='x', pady=10, padx=10)
         
         user_info = [
@@ -1275,46 +1756,46 @@ class MainApp:
         ]
         
         for i, (label, value) in enumerate(user_info):
-            row_frame = ttk.Frame(info_frame, style='TFrame')
+            row_frame = ttk.Frame(info_frame, style='Surface.TFrame')
             row_frame.pack(fill='x', pady=5)
             
             ttk.Label(row_frame, text=label, style='Normal.TLabel', width=15, anchor='e').pack(side='left', padx=5)
             ttk.Label(row_frame, text=value, style='Normal.TLabel', anchor='w').pack(side='left', padx=5, fill='x', expand=True)
             
-        button_frame = ttk.Frame(profile_frame, style='TFrame')
+        button_frame = ttk.Frame(profile_frame, style='Surface.TFrame')
         button_frame.pack(pady=20)
         
         ttk.Button(button_frame, text='Изменить адрес',
-                   command=self.edit_address, style='Accent.TButton').pack(side='left', padx=10)
+                   command=self.edit_address, style='Primary.TButton').pack(side='left', padx=10)
         
-        ttk.Button(button_frame, text='🔄', 
-                   command=self.load_user_data, style='Accent.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Обновить данные',
+                   command=self.load_user_data, style='Secondary.TButton').pack(side='left', padx=10)
         
         ttk.Button(button_frame, text='Сменить пароль', command=self.change_password,
-                   style='Accent.TButton').pack(side='left', padx=10)
+                   style='Secondary.TButton').pack(side='left', padx=10)
         
         ttk.Button(button_frame, text='Выйти из аккаунта',
-                   command=self.logout, style='Accent.TButton').pack(side='left', padx=10)
+                   command=self.logout, style='Secondary.TButton').pack(side='left', padx=10)
         
     def edit_address(self):
         edit_window = tk.Toplevel(self.root)
         edit_window.title('Изменение адреса')
         edit_window.geometry('600x500')
         edit_window.resizable(False, False)
-        edit_window.configure(bg='#40E0D0')
+        edit_window.configure(bg=self.style.background_color)
         edit_window.grab_set()
         edit_window.transient(self.root)
         edit_window.geometry(f'+{self.root.winfo_x() + 100}+{self.root.winfo_y() + 100}')
         
-        content_frame = ttk.Frame(edit_window, style='TFrame')
-        content_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        content_frame = ttk.Frame(edit_window, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
         
         ttk.Label(content_frame, text='Изменение адреса доставки', style='Header.TLabel').pack(pady=20)
         
         current_address = self.user_data.get('address', 'Не указан')
-        ttk.Label(content_frame, text='Новый адрес:', style='Normal.TLabel').pack(pady=5, anchor='w')
-        address_entry = ttk.Entry(content_frame, width=50, font=('Arial', 12), style='TEntry')
-        address_entry.pack(pady=5, fill='x')
+        ttk.Label(content_frame, text='Новый адрес:', style='Normal.TLabel').pack(anchor='w', pady=5)
+        address_entry = ttk.Entry(content_frame, width=50, font=('Arial', 12), style='Modern.TEntry')
+        address_entry.pack(fill='x', pady=5)
         
         def save_address():
             new_address = address_entry.get().strip()
@@ -1344,45 +1825,46 @@ class MainApp:
             except requests.exceptions.RequestException as e:
                 messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
         
-        save_btn = ttk.Button(content_frame, text='✔️', command=save_address, style='Accent.TButton')
-        save_btn.pack(pady=20)
+        button_frame = ttk.Frame(content_frame, style='Surface.TFrame')
+        button_frame.pack(pady=20)
         
-        ttk.Button(content_frame, text='❌', command=edit_window.destroy, style='Accent.TButton').pack(pady=10)
+        ttk.Button(button_frame, text='Сохранить', command=save_address, style='Primary.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=edit_window.destroy, style='Secondary.TButton').pack(side='left', padx=10)
     
     def change_password(self):
         password_window = tk.Toplevel(self.root)
         password_window.title('Смена пароля')
         password_window.geometry('600x500')
         password_window.resizable(False, False)
-        password_window.configure(bg='#40E0D0')
+        password_window.configure(bg=self.style.background_color)
         password_window.grab_set()
         
         password_window.transient(self.root)
         password_window.geometry(f'+{self.root.winfo_x() + 100}+{self.root.winfo_y() + 100}')
         
         user_email = self.user_data['email']
-        content_frame = ttk.Frame(password_window, style='TFrame')
-        content_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        content_frame = ttk.Frame(password_window, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
         
         ttk.Label(content_frame, text='Смена пароля', style='Header.TLabel').pack(pady=20)
         ttk.Label(content_frame, text=f'Для смены пароля будет отправлен код на email: {user_email}', style='Normal.TLabel', wraplength=400).pack(pady=10)
         
-        code_frame = ttk.Frame(content_frame, style='TFrame')
+        code_frame = ttk.Frame(content_frame, style='Surface.TFrame')
 
         def show_code_entry():
             send_btn.pack_forget()
             
-            ttk.Label(code_frame, text='Код подтверждения', style='Normal.TLabel').pack(pady=5)
-            code_entry = ttk.Entry(code_frame, width=30, font=('Arial', 12), style='TEntry')
-            code_entry.pack(pady=5)
+            ttk.Label(code_frame, text='Код подтверждения', style='Normal.TLabel').pack(anchor='w', pady=5)
+            code_entry = ttk.Entry(code_frame, width=30, font=('Arial', 12), style='Modern.TEntry')
+            code_entry.pack(fill='x', pady=5)
             
-            ttk.Label(code_frame, text='Новый пароль:', style='Normal.TLabel').pack(pady=5)
-            new_password_entry = ttk.Entry(code_frame, width=30, show='*', font=('Arial', 12), style='TEntry')
-            new_password_entry.pack(pady=5)
+            ttk.Label(code_frame, text='Новый пароль:', style='Normal.TLabel').pack(anchor='w', pady=5)
+            new_password_entry = ttk.Entry(code_frame, width=30, show='*', font=('Arial', 12), style='Modern.TEntry')
+            new_password_entry.pack(fill='x', pady=5)
             
-            ttk.Label(code_frame, text='Подтвердите пароль:', style='Normal.TLabel').pack(pady=5)
-            confirm_password_entry = ttk.Entry(code_frame, width=30, show='*', font=('Arial', 12), style='TEntry')
-            confirm_password_entry.pack(pady=5)
+            ttk.Label(code_frame, text='Подтвердите пароль:', style='Normal.TLabel').pack(anchor='w', pady=5)
+            confirm_password_entry = ttk.Entry(code_frame, width=30, show='*', font=('Arial', 12), style='Modern.TEntry')
+            confirm_password_entry.pack(fill='x', pady=5)
             
             def confirm_change():
                 code = code_entry.get().strip()
@@ -1416,7 +1898,7 @@ class MainApp:
                 except requests.exceptions.RequestException as e:
                     messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
             
-            ttk.Button(code_frame, text='✔️', command=confirm_change, style='Accent.TButton').pack(pady=20)
+            ttk.Button(code_frame, text='Сменить пароль', command=confirm_change, style='Primary.TButton').pack(pady=20)
             code_frame.pack()
         
         def send_code():
@@ -1435,56 +1917,27 @@ class MainApp:
             except requests.exceptions.RequestException as e:
                 messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
 
-        send_btn = ttk.Button(content_frame, text='Отправить код', command=send_code, style='Accent.TButton')
+        send_btn = ttk.Button(content_frame, text='Отправить код', command=send_code, style='Primary.TButton')
         send_btn.pack(pady=20)
         
-        ttk.Button(content_frame, text='❌', command=password_window.destroy, style='Accent.TButton').pack(pady=10)
+        ttk.Button(content_frame, text='Отмена', command=password_window.destroy, style='Secondary.TButton').pack(pady=10)
 
 class AdminApp:
     def __init__(self, root, token):
         self.root = root
         self.root.title('ANTech - Панель администратора')
         self.root.state('zoomed')
-        self.root.configure(bg='#40E0D0')
+        self.style = ModernStyle()
+        self.setup_styles()
+        self.root.configure(bg=self.style.background_color)
         self.token = token
         self.base_url = 'http://127.0.0.1:8000'
         
-        self.style = ttk.Style()
-        self.style.configure('Header.TLabel', font=('Arial', 16, 'bold'), background='#40E0D0', foreground='black')
-        self.style.configure('Normal.TLabel', font=('Arial', 12), background='#40E0D0', foreground='black')
-        self.style.configure('Accent.TButton', font=('Arial', 12), background='white', foreground='black')
-        self.style.configure('TFrame', background='#40E0D0')
-        self.style.configure('TNotebook', background='#40E0D0')
-        self.style.configure('TNotebook.Tab', background='white', foreground='black')
-        self.style.configure('Treeview', background='white', foreground='black', fieldbackground='white')
-        self.style.configure('Treeview.Heading', background='#40E0D0', foreground='black', font=('Arial', 10, 'bold'))
-        self.style.configure('TEntry', fieldbackground='white', foreground='black')
-        self.style.configure('TCombobox', fieldbackground='white', foreground='black')
-        
-        self.main_container = ttk.Frame(root, style='TFrame')
+        self.main_container = ttk.Frame(root, style='Modern.TFrame')
         self.main_container.pack(fill='both', expand=True)
         
-        self.header_frame = ttk.Frame(self.main_container, style='TFrame')
-        self.header_frame.pack(fill='x', pady=10)
-        
-        ttk.Label(self.header_frame, text='Панель администратора', style='Header.TLabel').pack(side='left', padx=20)
-        ttk.Button(self.header_frame, text='Выход', command=self.logout, style='Accent.TButton').pack(side='right', padx=20)
-        
-        self.tab_control = ttk.Notebook(self.main_container)
-        
-        self.tab_users = ttk.Frame(self.tab_control, style='TFrame')
-        self.tab_manufactures = ttk.Frame(self.tab_control, style='TFrame')
-        self.tab_components = ttk.Frame(self.tab_control, style='TFrame')
-        self.tab_configurations = ttk.Frame(self.tab_control, style='TFrame')
-        self.tab_orders = ttk.Frame(self.tab_control, style='TFrame')
-        
-        self.tab_control.add(self.tab_users, text='Пользователи')
-        self.tab_control.add(self.tab_manufactures, text='Производители')
-        self.tab_control.add(self.tab_components, text='Компоненты')
-        self.tab_control.add(self.tab_configurations, text='Конфигурации')
-        self.tab_control.add(self.tab_orders, text='Заказы')
-        
-        self.tab_control.pack(fill='both', expand=1)
+        self.create_header()
+        self.create_tabs()
         
         self.init_users_tab()
         self.init_manufactures_tab()
@@ -1492,10 +1945,103 @@ class AdminApp:
         self.init_configurations_tab()
         self.init_orders_tab()
     
+    def setup_styles(self):
+        style = ttk.Style()
+        style.configure('Modern.TFrame', background=self.style.background_color)
+        style.configure('Surface.TFrame', background=self.style.surface_color)
+        style.configure('Header.TLabel', 
+                       font=('Arial', 16, 'bold'),
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary)
+        style.configure('Normal.TLabel', 
+                       font=('Arial', 11),
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary)
+        style.configure('Secondary.TLabel',
+                       font=('Arial', 11),
+                       background=self.style.surface_color,
+                       foreground=self.style.text_secondary)
+        style.configure('Primary.TButton', 
+                       font=('Arial', 11), 
+                       background=self.style.primary_color,
+                       foreground='white',
+                       borderwidth=0,
+                       focuscolor='none')
+        style.map('Primary.TButton',
+                 background=[('active', self.style.secondary_color)])
+        style.configure('Secondary.TButton',
+                       font=('Arial', 11),
+                       background=self.style.surface_color,
+                       foreground=self.style.primary_color,
+                       borderwidth=1)
+        style.map('Secondary.TButton',
+                 background=[('active', self.style.background_color)])
+        style.configure('Modern.TNotebook', 
+                       background=self.style.background_color)
+        style.configure('Modern.TNotebook.Tab', 
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary,
+                       padding=(20, 10))
+        style.map('Modern.TNotebook.Tab',
+                 background=[('selected', self.style.primary_color),
+                           ('active', self.style.secondary_color)],
+                 foreground=[('selected', 'white')])
+        style.configure('Treeview',
+                       background=self.style.surface_color,
+                       foreground=self.style.text_primary,
+                       fieldbackground=self.style.surface_color,
+                       rowheight=25)
+        style.configure('Treeview.Heading',
+                       background=self.style.primary_color,
+                       foreground='white',
+                       font=('Arial', 10, 'bold'))
+        style.map('Treeview.Heading',
+                 background=[('active', self.style.secondary_color)])
+        style.configure('Modern.TEntry',
+                       fieldbackground=self.style.surface_color,
+                       foreground=self.style.text_primary,
+                       borderwidth=1,
+                       relief='solid')
+        style.configure('Modern.TCombobox',
+                       fieldbackground=self.style.surface_color,
+                       foreground=self.style.text_primary)
+    
+    def create_header(self):
+        header_frame = ttk.Frame(self.main_container, style='Surface.TFrame', padding=20)
+        header_frame.pack(fill='x', padx=20, pady=10)
+        
+        title_frame = ttk.Frame(header_frame, style='Surface.TFrame')
+        title_frame.pack(side='left')
+        
+        ttk.Label(title_frame, text='ANTech - Панель администратора', 
+                 style='Header.TLabel').pack(anchor='w')
+        ttk.Label(title_frame, text='Управление системой', 
+                 style='Secondary.TLabel').pack(anchor='w')
+        
+        ttk.Button(header_frame, text='Выход', 
+                  command=self.logout, style='Secondary.TButton').pack(side='right')
+    
+    def create_tabs(self):
+        tab_control = ttk.Notebook(self.main_container, style='Modern.TNotebook')
+        
+        self.tab_users = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
+        self.tab_manufactures = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
+        self.tab_components = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
+        self.tab_configurations = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
+        self.tab_orders = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
+        
+        tab_control.add(self.tab_users, text='Пользователи')
+        tab_control.add(self.tab_manufactures, text='Производители')
+        tab_control.add(self.tab_components, text='Компоненты')
+        tab_control.add(self.tab_configurations, text='Конфигурации')
+        tab_control.add(self.tab_orders, text='Заказы')
+        
+        tab_control.pack(fill='both', expand=True, padx=20, pady=10)
+    
     def logout(self):
         for widget in self.root.winfo_children():
             widget.destroy()
-        AuthApp(self.root)
+        ModernAuthApp(self.root)
     
     def make_api_request(self, endpoint, method='GET', params=None, json_data=None):
         try:
@@ -1522,33 +2068,30 @@ class AdminApp:
             return None
     
     def init_users_tab(self):
-        """Вкладка управления пользователями"""
-        main_frame = ttk.Frame(self.tab_users, style='TFrame')
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        main_frame = ttk.Frame(self.tab_users, style='Surface.TFrame')
+        main_frame.pack(fill='both', expand=True)
         
-        ttk.Label(main_frame, text='Управление пользователями', style='Header.TLabel').pack(pady=10)
+        ttk.Label(main_frame, text='Управление пользователями', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
 
-        search_frame = ttk.Frame(main_frame, style='TFrame')
-        search_frame.pack(fill='x', pady=10)
+        search_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        search_frame.pack(fill='x', pady=(0, 20))
         
         ttk.Label(search_frame, text='Поиск пользователя:', style='Normal.TLabel').pack(side='left', padx=5)
         
         self.user_search_var = tk.StringVar()
-        search_entry = ttk.Entry(search_frame, textvariable=self.user_search_var, width=30, style='TEntry')
+        search_entry = ttk.Entry(search_frame, textvariable=self.user_search_var, width=30, style='Modern.TEntry')
         search_entry.pack(side='left', padx=5)
         
-        ttk.Button(search_frame, text='🔎', 
-                  command=self.search_user, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(search_frame, text='🔄', 
-                  command=self.load_users, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(search_frame, text='Найти', 
+                  command=self.search_user, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(search_frame, text='Обновить', 
+                  command=self.load_users, style='Secondary.TButton').pack(side='left', padx=5)
 
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill='x', pady=10)
+        button_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        button_frame.pack(fill='x', pady=(0, 20))
         
-        ttk.Button(button_frame, text='🔄', 
-                  command=self.load_users, style='Accent.TButton').pack(side='left', padx=5)
         ttk.Button(button_frame, text='Изменить роль', 
-                  command=self.change_user_role, style='Accent.TButton').pack(side='left', padx=5)
+                  command=self.change_user_role, style='Primary.TButton').pack(side='left', padx=5)
 
         columns = ('id', 'name', 'email', 'phone', 'role', 'address')
         self.users_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
@@ -1578,7 +2121,6 @@ class AdminApp:
         self.load_users()
     
     def search_user(self):
-        """Поиск пользователя по email или номеру телефона"""
         search_text = self.user_search_var.get().strip()
         
         if not search_text:
@@ -1623,12 +2165,10 @@ class AdminApp:
             messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
         
     def is_phone(self, text):
-        """Проверяет, является ли текст номером телефона"""
         phone_pattern = r'^[\d\s\-\+\(\)]+$'
         return bool(re.match(phone_pattern, text)) and len(text) >= 5
     
     def load_users(self):
-        """Загрузка списка пользователей"""
         data = self.make_api_request('/users/get_all/')
         if data:
             for item in self.users_tree.get_children():
@@ -1645,7 +2185,6 @@ class AdminApp:
                 ))
     
     def change_user_role(self):
-        """Изменение роли пользователя"""
         selected = self.users_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите пользователя')
@@ -1659,15 +2198,18 @@ class AdminApp:
         dialog = tk.Toplevel(self.root)
         dialog.title('Изменение роли пользователя')
         dialog.geometry('350x200')
-        dialog.configure(bg='#40E0D0')
+        dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
         
-        ttk.Label(dialog, text=f'Пользователь: {user_email}', style='Normal.TLabel').pack(pady=10)
-        ttk.Label(dialog, text=f'Текущая роль: {current_role}', style='Normal.TLabel').pack(pady=5)
+        content_frame = ttk.Frame(dialog, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
+        
+        ttk.Label(content_frame, text=f'Пользователь: {user_email}', style='Normal.TLabel').pack(pady=10)
+        ttk.Label(content_frame, text=f'Текущая роль: {current_role}', style='Normal.TLabel').pack(pady=5)
         
         role_var = tk.StringVar(value=current_role)
-        role_combo = ttk.Combobox(dialog, textvariable=role_var, state='readonly', style='TCombobox')
+        role_combo = ttk.Combobox(content_frame, textvariable=role_var, state='readonly', style='Modern.TCombobox')
         role_combo['values'] = ('Пользователь', 'Администратор')
         role_combo.pack(pady=10)
         
@@ -1685,23 +2227,23 @@ class AdminApp:
                 dialog.destroy()
                 self.load_users()
         
-        ttk.Button(dialog, text='✔️', command=save_role, style='Accent.TButton').pack(pady=10)
+        ttk.Button(content_frame, text='Сохранить', command=save_role, style='Primary.TButton').pack(pady=10)
         
     def init_manufactures_tab(self):
-        main_frame = ttk.Frame(self.tab_manufactures, style='TFrame')
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        main_frame = ttk.Frame(self.tab_manufactures, style='Surface.TFrame')
+        main_frame.pack(fill='both', expand=True)
         
-        ttk.Label(main_frame, text='Управление производителями', style='Header.TLabel').pack(pady=10)
+        ttk.Label(main_frame, text='Управление производителями', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
 
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill='x', pady=10)
+        button_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        button_frame.pack(fill='x', pady=(0, 20))
         
-        ttk.Button(button_frame, text='➕', 
-                  command=self.add_manufacture, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='🔄', 
-                  command=self.load_manufactures, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='❌', 
-                  command=self.delete_manufacture, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Добавить производителя', 
+                  command=self.add_manufacture, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Обновить', 
+                  command=self.load_manufactures, style='Secondary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Удалить', 
+                  command=self.delete_manufacture, style='Secondary.TButton').pack(side='left', padx=5)
 
         columns = ('id', 'name')
         self.manufactures_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
@@ -1739,13 +2281,16 @@ class AdminApp:
         dialog = tk.Toplevel(self.root)
         dialog.title('Добавление производителя')
         dialog.geometry('300x150')
-        dialog.configure(bg='#40E0D0')
+        dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
         
-        ttk.Label(dialog, text='Название производителя:', style='Normal.TLabel').pack(pady=10)
-        name_entry = ttk.Entry(dialog, width=30, style='TEntry')
-        name_entry.pack(pady=10)
+        content_frame = ttk.Frame(dialog, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
+        
+        ttk.Label(content_frame, text='Название производителя:', style='Normal.TLabel').pack(anchor='w', pady=5)
+        name_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
+        name_entry.pack(fill='x', pady=5)
         
         def save_manufacture():
             name = name_entry.get().strip()
@@ -1760,7 +2305,11 @@ class AdminApp:
                 dialog.destroy()
                 self.load_manufactures()
         
-        ttk.Button(dialog, text='✔️', command=save_manufacture, style='Accent.TButton').pack(pady=10)
+        button_frame = ttk.Frame(content_frame, style='Surface.TFrame')
+        button_frame.pack(pady=20)
+        
+        ttk.Button(button_frame, text='Сохранить', command=save_manufacture, style='Primary.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
     
     def delete_manufacture(self):
         selected = self.manufactures_tree.selection()
@@ -1780,58 +2329,58 @@ class AdminApp:
                 self.load_manufactures()
     
     def init_components_tab(self):
-        main_frame = ttk.Frame(self.tab_components, style='TFrame')
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        main_frame = ttk.Frame(self.tab_components, style='Surface.TFrame')
+        main_frame.pack(fill='both', expand=True)
         
-        ttk.Label(main_frame, text='Управление компонентами', style='Header.TLabel').pack(pady=10)
+        ttk.Label(main_frame, text='Управление компонентами', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
 
-        filter_frame = ttk.Frame(main_frame, style='TFrame')
-        filter_frame.pack(fill='x', padx=10, pady=5)
+        filter_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        filter_frame.pack(fill='x', pady=(0, 20))
 
         ttk.Label(filter_frame, text='Тип:', style='Normal.TLabel').pack(side='left', padx=5)
         self.admin_type_filter = tk.StringVar()
-        self.admin_type_combo = ttk.Combobox(filter_frame, textvariable=self.admin_type_filter, state='readonly', width=15, style='TCombobox')
+        self.admin_type_combo = ttk.Combobox(filter_frame, textvariable=self.admin_type_filter, state='readonly', width=15, style='Modern.TCombobox')
         self.admin_type_combo.pack(side='left', padx=5)
 
         ttk.Label(filter_frame, text='Цена от:', style='Normal.TLabel').pack(side='left', padx=5)
         self.admin_min_price_filter = tk.StringVar()
-        admin_min_price_entry = ttk.Entry(filter_frame, textvariable=self.admin_min_price_filter, width=8, style='TEntry')
+        admin_min_price_entry = ttk.Entry(filter_frame, textvariable=self.admin_min_price_filter, width=8, style='Modern.TEntry')
         admin_min_price_entry.pack(side='left', padx=2)
         
         ttk.Label(filter_frame, text='до:', style='Normal.TLabel').pack(side='left', padx=2)
         self.admin_max_price_filter = tk.StringVar()
-        admin_max_price_entry = ttk.Entry(filter_frame, textvariable=self.admin_max_price_filter, width=8, style='TEntry')
+        admin_max_price_entry = ttk.Entry(filter_frame, textvariable=self.admin_max_price_filter, width=8, style='Modern.TEntry')
         admin_max_price_entry.pack(side='left', padx=5)
  
-        ttk.Button(filter_frame, text='✔️', 
-                command=self.admin_apply_filters, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(filter_frame, text='🔄', 
-                command=self.admin_reset_filters, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(filter_frame, text='Применить', 
+                command=self.admin_apply_filters, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(filter_frame, text='Сбросить', 
+                command=self.admin_reset_filters, style='Secondary.TButton').pack(side='left', padx=5)
      
-        search_frame = ttk.Frame(main_frame, style='TFrame')
-        search_frame.pack(fill='x', padx=10, pady=5)
+        search_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        search_frame.pack(fill='x', pady=(0, 20))
         
         ttk.Label(search_frame, text='Поиск:', style='Normal.TLabel').pack(side='left', padx=5)
         self.admin_search_var = tk.StringVar()
-        admin_search_entry = ttk.Entry(search_frame, textvariable=self.admin_search_var, width=40, style='TEntry')
+        admin_search_entry = ttk.Entry(search_frame, textvariable=self.admin_search_var, width=40, style='Modern.TEntry')
         admin_search_entry.pack(side='left', padx=5)
         
-        ttk.Button(search_frame, text='🔎', 
-                command=self.admin_search_components, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(search_frame, text='🔄', 
-                command=self.admin_clear_search, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(search_frame, text='Найти', 
+                command=self.admin_search_components, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(search_frame, text='Сбросить', 
+                command=self.admin_clear_search, style='Secondary.TButton').pack(side='left', padx=5)
 
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill='x', pady=10)
+        button_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        button_frame.pack(fill='x', pady=(0, 20))
         
-        ttk.Button(button_frame, text='➕', 
-                  command=self.add_component, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='🔄', 
-                  command=self.load_components, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='✏️', 
-                  command=self.edit_component, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='❌', 
-                  command=self.delete_component, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Добавить компонент', 
+                  command=self.add_component, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Обновить', 
+                  command=self.load_components, style='Secondary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Редактировать', 
+                  command=self.edit_component, style='Secondary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Удалить', 
+                  command=self.delete_component, style='Secondary.TButton').pack(side='left', padx=5)
 
         columns = ('id', 'name', 'type', 'manufacture', 'price', 'stock')
         self.components_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
@@ -1884,7 +2433,6 @@ class AdminApp:
             self.admin_display_filtered_components()
     
     def admin_apply_filters(self):
-        """Применение фильтров к каталогу компонентов в админке"""
         if not hasattr(self, 'admin_all_components') or not self.admin_all_components:
             return
         
@@ -1922,7 +2470,6 @@ class AdminApp:
         self.admin_display_filtered_components()
 
     def admin_reset_filters(self):
-        """Сброс фильтров в админке"""
         self.admin_type_filter.set('Все типы')
         self.admin_min_price_filter.set('')
         self.admin_max_price_filter.set('')
@@ -1931,7 +2478,6 @@ class AdminApp:
         self.admin_display_filtered_components()
 
     def admin_display_filtered_components(self):
-        """Отображение отфильтрованных компонентов в админке"""
         for item in self.components_tree.get_children():
             self.components_tree.delete(item)
         
@@ -1946,14 +2492,12 @@ class AdminApp:
             ))
 
     def admin_search_components(self):
-        """Поиск компонентов в админке"""
         self.admin_apply_filters()
         
         if self.admin_search_var.get().strip():
             messagebox.showinfo('Поиск', f'Найдено компонентов: {len(self.admin_filtered_components)}')
 
     def admin_clear_search(self):
-        """Сброс поиска в админке"""
         self.admin_search_var.set('')
         self.admin_apply_filters()
     
@@ -1961,28 +2505,31 @@ class AdminApp:
         dialog = tk.Toplevel(self.root)
         dialog.title('Добавление компонента')
         dialog.geometry('400x400')
-        dialog.configure(bg='#40E0D0')
+        dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
 
-        ttk.Label(dialog, text='Название:', style='Normal.TLabel').grid(row=0, column=0, padx=10, pady=5, sticky='e')
-        name_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        content_frame = ttk.Frame(dialog, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
+
+        ttk.Label(content_frame, text='Название:', style='Normal.TLabel').grid(row=0, column=0, padx=10, pady=5, sticky='e')
+        name_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         name_entry.grid(row=0, column=1, padx=10, pady=5)
         
-        ttk.Label(dialog, text='Тип:', style='Normal.TLabel').grid(row=1, column=0, padx=10, pady=5, sticky='e')
-        type_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        ttk.Label(content_frame, text='Тип:', style='Normal.TLabel').grid(row=1, column=0, padx=10, pady=5, sticky='e')
+        type_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         type_entry.grid(row=1, column=1, padx=10, pady=5)
         
-        ttk.Label(dialog, text='Производитель:', style='Normal.TLabel').grid(row=2, column=0, padx=10, pady=5, sticky='e')
-        manufacture_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        ttk.Label(content_frame, text='Производитель:', style='Normal.TLabel').grid(row=2, column=0, padx=10, pady=5, sticky='e')
+        manufacture_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         manufacture_entry.grid(row=2, column=1, padx=10, pady=5)
         
-        ttk.Label(dialog, text='Цена:', style='Normal.TLabel').grid(row=3, column=0, padx=10, pady=5, sticky='e')
-        price_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        ttk.Label(content_frame, text='Цена:', style='Normal.TLabel').grid(row=3, column=0, padx=10, pady=5, sticky='e')
+        price_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         price_entry.grid(row=3, column=1, padx=10, pady=5)
         
-        ttk.Label(dialog, text='Количество:', style='Normal.TLabel').grid(row=4, column=0, padx=10, pady=5, sticky='e')
-        stock_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        ttk.Label(content_frame, text='Количество:', style='Normal.TLabel').grid(row=4, column=0, padx=10, pady=5, sticky='e')
+        stock_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         stock_entry.grid(row=4, column=1, padx=10, pady=5)
         
         def save_component():
@@ -2016,7 +2563,11 @@ class AdminApp:
                 dialog.destroy()
                 self.load_components()
         
-        ttk.Button(dialog, text='✔️', command=save_component, style='Accent.TButton').grid(row=5, column=0, columnspan=2, pady=20)
+        button_frame = ttk.Frame(content_frame, style='Surface.TFrame')
+        button_frame.grid(row=5, column=0, columnspan=2, pady=20)
+        
+        ttk.Button(button_frame, text='Сохранить', command=save_component, style='Primary.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
     
     def edit_component(self):
         selected = self.components_tree.selection()
@@ -2039,42 +2590,45 @@ class AdminApp:
         dialog = tk.Toplevel(self.root)
         dialog.title('Редактирование компонента')
         dialog.geometry('500x600')
-        dialog.configure(bg='#40E0D0')
+        dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
 
-        ttk.Label(dialog, text='Название:', style='Normal.TLabel').grid(row=0, column=0, padx=10, pady=5, sticky='e')
-        name_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        content_frame = ttk.Frame(dialog, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
+
+        ttk.Label(content_frame, text='Название:', style='Normal.TLabel').grid(row=0, column=0, padx=10, pady=5, sticky='e')
+        name_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         name_entry.insert(0, current_data[1])
         name_entry.grid(row=0, column=1, padx=10, pady=5)
 
-        ttk.Label(dialog, text='Тип:', style='Normal.TLabel').grid(row=1, column=0, padx=10, pady=5, sticky='e')
-        type_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        ttk.Label(content_frame, text='Тип:', style='Normal.TLabel').grid(row=1, column=0, padx=10, pady=5, sticky='e')
+        type_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         type_entry.insert(0, current_data[2] if current_data[2] else '')
         type_entry.grid(row=1, column=1, padx=10, pady=5)
 
-        ttk.Label(dialog, text='Производитель:', style='Normal.TLabel').grid(row=2, column=0, padx=10, pady=5, sticky='e')
-        manufacture_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        ttk.Label(content_frame, text='Производитель:', style='Normal.TLabel').grid(row=2, column=0, padx=10, pady=5, sticky='e')
+        manufacture_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         manufacture_entry.insert(0, current_data[3] if current_data[3] else '')
         manufacture_entry.grid(row=2, column=1, padx=10, pady=5)
 
-        ttk.Label(dialog, text='Цена:', style='Normal.TLabel').grid(row=3, column=0, padx=10, pady=5, sticky='e')
-        price_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        ttk.Label(content_frame, text='Цена:', style='Normal.TLabel').grid(row=3, column=0, padx=10, pady=5, sticky='e')
+        price_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         price_entry.insert(0, str(current_data[4]))
         price_entry.grid(row=3, column=1, padx=10, pady=5)
 
-        ttk.Label(dialog, text='Количество на складе:', style='Normal.TLabel').grid(row=4, column=0, padx=10, pady=5, sticky='e')
-        stock_entry = ttk.Entry(dialog, width=30, style='TEntry')
+        ttk.Label(content_frame, text='Количество на складе:', style='Normal.TLabel').grid(row=4, column=0, padx=10, pady=5, sticky='e')
+        stock_entry = ttk.Entry(content_frame, width=30, style='Modern.TEntry')
         stock_entry.insert(0, str(current_data[5]))
         stock_entry.grid(row=4, column=1, padx=10, pady=5)
 
-        spec_frame = ttk.LabelFrame(dialog, text='Спецификация (JSON)')
+        spec_frame = ttk.LabelFrame(content_frame, text='Спецификация (JSON)')
         spec_frame.grid(row=5, column=0, columnspan=2, padx=10, pady=5, sticky='nsew')
 
         ttk.Label(spec_frame, text='Формат: [{"key": "название", "value": "значение"}, ...] или {"ключ": "значение", ...}', 
                 font=('Arial', 8), foreground='gray').pack(anchor='w', padx=5, pady=2)
         
-        spec_text = scrolledtext.ScrolledText(spec_frame, width=60, height=8, bg='white', fg='black')
+        spec_text = scrolledtext.ScrolledText(spec_frame, width=60, height=8, bg=self.style.surface_color, fg=self.style.text_primary)
         spec_text.pack(fill='both', expand=True, padx=5, pady=5)
 
         def load_component_details():
@@ -2151,18 +2705,18 @@ class AdminApp:
                 dialog.destroy()
                 self.load_components()
 
-        button_frame = ttk.Frame(dialog, style='TFrame')
+        button_frame = ttk.Frame(content_frame, style='Surface.TFrame')
         button_frame.grid(row=6, column=0, columnspan=2, pady=20)
 
-        ttk.Button(button_frame, text='✔️', command=save_component, 
-                style='Accent.TButton').pack(side='left', padx=10)
-        ttk.Button(button_frame, text='❌', command=dialog.destroy, 
-                style='Accent.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Сохранить', command=save_component, 
+                style='Primary.TButton').pack(side='left', padx=10)
+        ttk.Button(button_frame, text='Отмена', command=dialog.destroy, 
+                style='Secondary.TButton').pack(side='left', padx=10)
 
         dialog.grid_rowconfigure(5, weight=1)
         dialog.grid_columnconfigure(1, weight=1)
 
-        help_label = ttk.Label(dialog, 
+        help_label = ttk.Label(content_frame, 
                             text='Подсказка: Используйте валидный JSON формат. Пример: [{"Сокет": "LGA 1700"}, {"Чипсет": "Intel Z690"}]',
                             font=('Arial', 8),
                             foreground='blue')
@@ -2186,35 +2740,32 @@ class AdminApp:
                 self.load_components()
     
     def init_configurations_tab(self):
-        main_frame = ttk.Frame(self.tab_configurations, style='TFrame')
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        main_frame = ttk.Frame(self.tab_configurations, style='Surface.TFrame')
+        main_frame.pack(fill='both', expand=True)
         
-        ttk.Label(main_frame, text='Управление конфигурациями', style='Header.TLabel').pack(pady=10)
+        ttk.Label(main_frame, text='Управление конфигурациями', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
 
-        # Добавляем рамку для поиска
-        search_frame = ttk.Frame(main_frame, style='TFrame')
-        search_frame.pack(fill='x', pady=10)
+        search_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        search_frame.pack(fill='x', pady=(0, 20))
         
         ttk.Label(search_frame, text='Поиск по названию:', style='Normal.TLabel').pack(side='left', padx=5)
         
         self.config_search_var = tk.StringVar()
-        search_entry = ttk.Entry(search_frame, textvariable=self.config_search_var, width=30, style='TEntry')
+        search_entry = ttk.Entry(search_frame, textvariable=self.config_search_var, width=30, style='Modern.TEntry')
         search_entry.pack(side='left', padx=5)
         
-        ttk.Button(search_frame, text='🔎', 
-                  command=self.search_configurations, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(search_frame, text='🔄', 
-                  command=self.load_configurations, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(search_frame, text='Найти', 
+                  command=self.search_configurations, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(search_frame, text='Обновить', 
+                  command=self.load_configurations, style='Secondary.TButton').pack(side='left', padx=5)
 
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill='x', pady=10)
+        button_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        button_frame.pack(fill='x', pady=(0, 20))
         
-        ttk.Button(button_frame, text='🔄', 
-                  command=self.load_configurations, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='👀', 
-                  command=self.view_configuration, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='❌', 
-                  command=self.delete_configuration, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Просмотреть', 
+                  command=self.view_configuration, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Удалить', 
+                  command=self.delete_configuration, style='Secondary.TButton').pack(side='left', padx=5)
 
         columns = ('id', 'user', 'name', 'description', 'created')
         self.configurations_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
@@ -2243,7 +2794,6 @@ class AdminApp:
         self.load_configurations()
 
     def search_configurations(self):
-        """Поиск конфигураций по названию"""
         search_text = self.config_search_var.get().strip().lower()
         
         if not search_text:
@@ -2266,7 +2816,6 @@ class AdminApp:
             self.display_configurations(data)
             
     def display_configurations(self, configurations):
-        """Отображение списка конфигураций в таблице"""
         for item in self.configurations_tree.get_children():
             self.configurations_tree.delete(item)
             
@@ -2300,12 +2849,15 @@ class AdminApp:
             dialog = tk.Toplevel(self.root)
             dialog.title(f'Компоненты конфигурации #{config_id}')
             dialog.geometry('1000x600')
-            dialog.configure(bg='#40E0D0')
+            dialog.configure(bg=self.style.background_color)
             dialog.transient(self.root)
             dialog.grab_set()
             
+            content_frame = ttk.Frame(dialog, style='Surface.TFrame', padding=20)
+            content_frame.pack(fill='both', expand=True)
+            
             columns = ('component', 'type', 'manufacture', 'price', 'quantity', 'total')
-            tree = ttk.Treeview(dialog, columns=columns, show='headings', height=15)
+            tree = ttk.Treeview(content_frame, columns=columns, show='headings', height=15)
             
             tree.heading('component', text='Компонент')
             tree.heading('type', text='Тип')
@@ -2321,7 +2873,7 @@ class AdminApp:
             tree.column('quantity', width=80)
             tree.column('total', width=80)
             
-            scrollbar = ttk.Scrollbar(dialog, orient=tk.VERTICAL, command=tree.yview)
+            scrollbar = ttk.Scrollbar(content_frame, orient=tk.VERTICAL, command=tree.yview)
             tree.configure(yscroll=scrollbar.set)
             
             tree.pack(side='left', fill='both', expand=True, padx=10, pady=10)
@@ -2341,7 +2893,7 @@ class AdminApp:
                     f"{total_price:.2f} руб."
                 ))
             
-            ttk.Label(dialog, text=f'Общая сумма: {total_amount:.2f} руб.', style='Header.TLabel').pack(pady=10)
+            ttk.Label(content_frame, text=f'Общая сумма: {total_amount:.2f} руб.', style='Header.TLabel').pack(pady=10)
     
     def delete_configuration(self):
         selected = self.configurations_tree.selection()
@@ -2361,34 +2913,32 @@ class AdminApp:
                 self.load_configurations()
     
     def init_orders_tab(self):
-        main_frame = ttk.Frame(self.tab_orders, style='TFrame')
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        main_frame = ttk.Frame(self.tab_orders, style='Surface.TFrame')
+        main_frame.pack(fill='both', expand=True)
         
-        ttk.Label(main_frame, text='Управление заказами', style='Header.TLabel').pack(pady=10)
+        ttk.Label(main_frame, text='Управление заказами', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
 
-        search_frame = ttk.Frame(main_frame, style='TFrame')
-        search_frame.pack(fill='x', pady=10)
+        search_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        search_frame.pack(fill='x', pady=(0, 20))
         
         ttk.Label(search_frame, text='Поиск по email:', style='Normal.TLabel').pack(side='left', padx=5)
         
         self.order_search_var = tk.StringVar()
-        search_entry = ttk.Entry(search_frame, textvariable=self.order_search_var, width=30, style='TEntry')
+        search_entry = ttk.Entry(search_frame, textvariable=self.order_search_var, width=30, style='Modern.TEntry')
         search_entry.pack(side='left', padx=5)
         
-        ttk.Button(search_frame, text='🔎', 
-                  command=self.search_orders, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(search_frame, text='🔄', 
-                  command=self.load_orders, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(search_frame, text='Найти', 
+                  command=self.search_orders, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(search_frame, text='Обновить', 
+                  command=self.load_orders, style='Secondary.TButton').pack(side='left', padx=5)
 
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill='x', pady=10)
+        button_frame = ttk.Frame(main_frame, style='Surface.TFrame')
+        button_frame.pack(fill='x', pady=(0, 20))
         
-        ttk.Button(button_frame, text='🔄', 
-                  command=self.load_orders, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='✏️', 
-                  command=self.change_order_status, style='Accent.TButton').pack(side='left', padx=5)
-        ttk.Button(button_frame, text='❌', 
-                  command=self.delete_order, style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Изменить статус', 
+                  command=self.change_order_status, style='Primary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Удалить', 
+                  command=self.delete_order, style='Secondary.TButton').pack(side='left', padx=5)
 
         columns = ('id', 'user', 'date', 'total', 'status')
         self.orders_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
@@ -2417,7 +2967,6 @@ class AdminApp:
         self.load_orders()
 
     def search_orders(self):
-        """Поиск заказов по email пользователя"""
         search_text = self.order_search_var.get().strip().lower()
         
         if not search_text:
@@ -2440,7 +2989,6 @@ class AdminApp:
             self.display_orders(data)
             
     def display_orders(self, orders):
-        """Отображение списка заказов в таблице"""
         for item in self.orders_tree.get_children():
             self.orders_tree.delete(item)
             
@@ -2482,15 +3030,18 @@ class AdminApp:
         dialog = tk.Toplevel(self.root)
         dialog.title('Изменение статуса заказа')
         dialog.geometry('400x200')
-        dialog.configure(bg='#40E0D0')
+        dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
         
-        ttk.Label(dialog, text=f'Заказ: #{order_id}', style='Normal.TLabel').pack(pady=10)
-        ttk.Label(dialog, text=f'Текущий статус: {current_status}', style='Normal.TLabel').pack(pady=5)
+        content_frame = ttk.Frame(dialog, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
+        
+        ttk.Label(content_frame, text=f'Заказ: #{order_id}', style='Normal.TLabel').pack(pady=10)
+        ttk.Label(content_frame, text=f'Текущий статус: {current_status}', style='Normal.TLabel').pack(pady=5)
         
         status_var = tk.StringVar(value=current_status)
-        status_combo = ttk.Combobox(dialog, textvariable=status_var, state='readonly', style='TCombobox')
+        status_combo = ttk.Combobox(content_frame, textvariable=status_var, state='readonly', style='Modern.TCombobox')
         status_combo['values'] = status_names
         status_combo.pack(pady=10)
         
@@ -2519,7 +3070,7 @@ class AdminApp:
                 dialog.destroy()
                 self.load_orders()
         
-        ttk.Button(dialog, text='✔️', command=save_status, style='Accent.TButton').pack(pady=10)
+        ttk.Button(content_frame, text='Сохранить', command=save_status, style='Primary.TButton').pack(pady=10)
     
     def delete_order(self):
         selected = self.orders_tree.selection()
@@ -2537,369 +3088,7 @@ class AdminApp:
                 messagebox.showinfo('Успех!', 'Заказ удален')
                 self.load_orders()
 
-class AuthApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title('')
-        self.root.geometry('1920x1080')
-        self.root.state('zoomed')
-        
-        self.bg_color = '#40E0D0'
-        self.fg_color = 'black'
-        self.accent_color = "white"
-        self.button_fg = "black"
-        self.entry_bg = 'white'
-        
-        self.title_font = Font(family='Helvetica', size=30, weight='bold')
-        self.normal_font = Font(family='Arial', size=14, weight='normal') 
-        self.root.configure(bg=self.bg_color)
-        
-        self.main_frame = tk.Frame(self.root, bg=self.bg_color)
-        self.main_frame.place(relx=0.5, rely=0.5, anchor='center')
-        
-        self.create_auth_widgets()
-        
-        self.base_url = 'http://127.0.0.1:8000'
-        self.token = None
-    
-    def create_auth_widgets(self):
-        tk.Label(self.main_frame,
-                 text='Приветствуем вас в ANtech',
-                 font=self.title_font,
-                 bg=self.bg_color,
-                 fg=self.fg_color
-                 ).grid(row=0, column=0, columnspan=2, pady=(0, 40))
-
-        tk.Label(
-            self.main_frame, 
-            text='Email или телефон:', 
-            font=self.normal_font,
-            bg=self.bg_color,
-            fg=self.fg_color
-        ).grid(row=1, column=0, sticky='e', padx=10, pady=5)
-        
-        self.login_entry = ttk.Entry(self.main_frame, width=30, font=self.normal_font)
-        self.login_entry.grid(row=1, column=1, pady=5, ipady=5)
-        
-        tk.Label(
-            self.main_frame,
-            text='Пароль:',
-            font=self.normal_font,
-            bg=self.bg_color,
-            fg=self.fg_color
-        ).grid(row=2, column=0, sticky='e', padx=10, pady=5)
-        
-        self.password_entry = ttk.Entry(self.main_frame, width=30, show='*', font=self.normal_font)
-        self.password_entry.grid(row=2, column=1, pady=5, ipady=5)
-
-        btn_frame = tk.Frame(self.main_frame, bg=self.bg_color)
-        btn_frame.grid(row=3, columnspan=2, pady=30)
-        
-        style = ttk.Style()
-        style.configure('TButton', 
-                      font=self.normal_font, 
-                      background=self.accent_color,
-                      foreground=self.button_fg,
-                      padding=10)
-        
-        ttk.Button(btn_frame,
-                   text='Войти',
-                   command=self.login,
-                   style='TButton'
-                   ).pack(side='left', padx=10)
-        
-        ttk.Button(btn_frame,
-                   text='Регистрация',
-                   command=self.show_register,
-                   style='TButton'
-                   ).pack(side='left', padx=10)
-        
-        ttk.Button(btn_frame,
-                   text='Забыли пароль?',
-                   command=self.show_forgot_password,
-                   style='TButton'
-                   ).pack(side='left', padx=10)
-        
-    def is_phone(self, text):
-        phone_pattern = r'^[\d\s\-\+\(\)]+$'
-        return bool(re.match(phone_pattern, text)) and len(text) >= 5
-        
-    def login(self):
-        login = self.login_entry.get().strip()
-        password = self.password_entry.get().strip()
-    
-        if not login or not password:
-            messagebox.showerror('Ошибка!', 'Заполните все поля.')
-            return
-        try:
-            if self.is_phone(login):
-                auth_data = {'phone': login, 'password': password}
-            else:
-                auth_data = {'email': login, 'password': password}
-            
-            response = requests.post(
-                f'{self.base_url}/users/auth/',
-                json=auth_data
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.token = data.get('token')
-                self.token_expires = data.get('expires_at')
-                self.open_main_app()
-            else:
-                error = response.json().get('detail', 'Ошибка авторизации')
-                messagebox.showerror('Ошибка!', f'Ошибка авторизации: {error}')
-        except requests.exceptions.RequestException as e:
-            messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
-    
-    def open_main_app(self):
-        self.root.destroy()
-        root = tk.Tk()
-        MainApp(root, self.token)
-        root.mainloop()
-    
-    def show_register(self):
-        register_window = tk.Toplevel(self.root)
-        register_window.title('Регистрация')
-        register_window.geometry('600x500')
-        register_window.resizable(False, False)
-        register_window.configure(bg='#40E0D0')
-        
-        tk.Label(
-            register_window,
-            text='Регистрация',
-            font=self.title_font,
-            bg='#40E0D0',
-            fg='black'
-        ).pack(pady=20)
-        
-        form_frame = tk.Frame(register_window, bg='#40E0D0')
-        form_frame.pack(pady=20)
-        
-        tk.Label(
-            form_frame,
-            text='Email:',
-            font=self.normal_font,
-            bg='#40E0D0',
-            fg='black'
-        ).grid(row=0, column=0, pady=5, ipady=5)
-        
-        self.reg_email = ttk.Entry(form_frame, width=30, font=self.normal_font)
-        self.reg_email.grid(row=0, column=1, pady=5, ipady=5)
-        
-        tk.Label(
-            form_frame,
-            text='Пароль:',
-            font=self.normal_font,
-            bg='#40E0D0',
-            fg='black'
-        ).grid(row=1, column=0, padx=10, pady=5)
-        
-        self.reg_password = ttk.Entry(form_frame, width=30, show='*', font=self.normal_font)
-        self.reg_password.grid(row=1, column=1, pady=5, ipady=5)
-        
-        tk.Label(
-            form_frame,
-            text='Подтвердите пароль:',
-            font=self.normal_font,
-            bg='#40E0D0',
-            fg='black'
-        ).grid(row=2, column=0, sticky='e', padx=10, pady=5)
-        
-        self.reg_confirm_password = ttk.Entry(form_frame, width=30, show='*', font=self.normal_font)
-        self.reg_confirm_password.grid(row=2, column=1, pady=5, ipady=5)
-        
-        tk.Label(
-            form_frame,
-            text='ФИО:',
-            font=self.normal_font,
-            bg='#40E0D0',
-            fg='black'
-        ).grid(row=3, column=0, sticky='e', padx=10, pady=5)
-        
-        self.reg_full_name = ttk.Entry(form_frame, width=30, font=self.normal_font)
-        self.reg_full_name.grid(row=3, column=1, pady=5, ipady=5)
-        
-        tk.Label(
-            form_frame,
-            text='Телефон:',
-            font=self.normal_font,
-            bg='#40E0D0',
-            fg='black'
-        ).grid(row=4, column=0, sticky='e', padx=10, pady=5)
-        
-        self.reg_phone = ttk.Entry(form_frame, width=30, font=self.normal_font)
-        self.reg_phone.grid(row=4, column=1, pady=5, ipady=5)
-        
-        tk.Label(
-            form_frame,
-            text='Адрес:',
-            font=self.normal_font,
-            bg='#40E0D0',
-            fg='black'
-        ).grid(row=5, column=0, sticky='e', padx=10, pady=5)
-        
-        self.reg_address = ttk.Entry(form_frame, width=30, font=self.normal_font)
-        self.reg_address.grid(row=5, column=1, sticky='e', padx=10, pady=5)
-        
-        ttk.Button(
-            register_window,
-            text='Зарегистрироваться',
-            command=self.register,
-            style='TButton'
-        ).pack(pady=20)
-        
-    def register(self):
-        data = {
-            'email': self.reg_email.get(),
-            'password': self.reg_password.get(),
-            'confirm_password': self.reg_confirm_password.get(),
-            'full_name': self.reg_full_name.get(),
-            'phone': self.reg_phone.get(),
-            'address': self.reg_address.get()
-        }
-        
-        if not all(data.values()):
-            messagebox.showerror('Ошибка!', 'Все поля обязательны')
-            return
-        
-        if data['password'] != data['confirm_password']:
-            messagebox.showerror('Ошибка!', 'Пароли не совпадают')
-            return
-        
-        try:
-            response = requests.post(
-                f'{self.base_url}/users/register/',
-                params={
-                    'email': data['email'],
-                    'password': data['password'],
-                    'full_name': data['full_name'],
-                    'number_phone': data['phone'],
-                    'address': data['address']
-                    }
-            )
-            if response.status_code == 200:
-                messagebox.showinfo('Успех!', 'Регистрация успешна')
-                self.reg_email.master.destroy()
-            else:
-                error = response.json().get('detail', 'Ошибка регистрации')
-                messagebox.showerror('Ошибка', error)
-        except requests.exceptions.RequestException:
-            messagebox.showerror('Ошибка', 'Не удалось подключиться к серверу')
-            
-    def show_forgot_password(self):
-        self.forgot_window = tk.Toplevel(self.root)
-        self.forgot_window.title('Восстановление пароля')
-        self.forgot_window.geometry('600x500')
-        self.forgot_window.resizable(False, False)
-        self.forgot_window.configure(bg='#40E0D0')
-        
-        tk.Label(
-            self.forgot_window,
-            text='Введите email для восстановления пароля',
-            font=self.normal_font,
-            bg='#40E0D0',
-            fg='black'
-        ).pack(pady=20)
-        
-        self.email_entry = ttk.Entry(self.forgot_window, width=30, font=self.normal_font)
-        self.email_entry.pack(pady=10)
-        
-        self.send_code_btn = ttk.Button(
-            self.forgot_window,
-            text='Отправить код',
-            command=self.send_confirmation_code,
-            style='TButton'
-        )
-        self.send_code_btn.pack(pady=20)
-        
-        self.code_frame = tk.Frame(self.forgot_window, bg='#40E0D0')
-        
-    def send_confirmation_code(self):
-        email = self.email_entry.get().strip()
-        if not email:
-            messagebox.showerror('Ошибка!', 'Введите email')
-            return
-        
-        try:
-            response = requests.post(
-                f'{self.base_url}/users/change_password/',
-                params={'email': email}
-            )
-            
-            if response.status_code == 200:
-                messagebox.showinfo('Успех!', 'Код подтверждения отправлен на ваш email')
-                self.send_code_btn.pack_forget()
-                
-                tk.Label(
-                    self.code_frame,
-                    text='Введите код подтверждения:',
-                    font=self.normal_font,
-                    bg='#40E0D0',
-                    fg='black'
-                    ).pack(pady=10)
-                
-                self.code_entry = ttk.Entry(self.code_frame, width=30, font=self.normal_font)
-                self.code_entry.pack(pady=10)
-                
-                tk.Label(
-                    self.code_frame,
-                    text='Новый пароль:',
-                    font=self.normal_font,
-                    bg='#40E0D0',
-                    fg='black'
-                ).pack(pady=10)
-                
-                self.new_password_entry = ttk.Entry(self.code_frame, width=30, show='*', font=self.normal_font)
-                self.new_password_entry.pack(pady=10)
-                
-                ttk.Button(
-                    self.code_frame,
-                    text='✔️',
-                    command=self.confirm_change_password,
-                    style='TButton'
-                ).pack(pady=20)
-                
-                self.code_frame.pack()
-            else:
-                error = response.json().get('detail', 'Ошибка отправки кода')
-                messagebox.showerror('Ошибка!', error)
-            
-        except requests.exceptions.RequestException as e:
-            messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
-        
-    def confirm_change_password(self):
-        email = self.email_entry.get().strip()
-        code = self.code_entry.get().strip()
-        new_password = self.new_password_entry.get().strip()
-        
-        if not all([email, code, new_password]):
-            messagebox.showerror('Ошибка!', 'Заполните все поля')
-            return
-        
-        try:
-            response = requests.post(
-                f'{self.base_url}/users/confirm_change_password/',
-                params={
-                    'email': email,
-                    'code': code,
-                    'new_password': new_password
-                }
-            )
-            
-            if response.status_code == 200:
-                messagebox.showinfo('Успех!', 'Пароль успешно изменен')
-                self.forgot_window.destroy()
-            else:
-                error = response.json().get('detail', 'Ошибка смены пароля')
-                messagebox.showerror('Ошибка!', error)
-        except requests.exceptions.RequestException as e:
-            messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
-        
-        
 if __name__ == '__main__':
     root = tk.Tk()
-    app = AuthApp(root)
+    app = ModernAuthApp(root)
     root.mainloop()
-        
