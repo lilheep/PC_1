@@ -6,8 +6,8 @@ import os
 import re
 import json
 
-os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
-os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
+# os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
+# os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
 
 class MainApp:
     def __init__(self, root, token):
@@ -578,7 +578,7 @@ class MainApp:
             messagebox.showwarning('Внимание!', 'Выберите конфигурацию для добавления компонентов')
             return
 
-        if not hasattr(self, 'components_data') or not self.components_data:
+        if not hasattr(self, 'all_components') or not self.all_components:
             messagebox.showwarning('Внимание!', 'Сначала загрузите каталог компонентов')
             return
         
@@ -598,7 +598,7 @@ class MainApp:
         type_var = tk.StringVar()
         type_combo = ttk.Combobox(filter_frame, textvariable=type_var, style='TCombobox')
 
-        types = list(set(comp['type_name'] for comp in self.components_data if comp['type_name']))
+        types = list(set(comp['type_name'] for comp in self.all_components if comp['type_name']))
         type_combo['values'] = ['Все'] + types
         type_combo.set('Все')
         type_combo.pack(side='left', padx=5)
@@ -637,7 +637,7 @@ class MainApp:
                 comp_tree.delete(item)
             
             selected_type = type_var.get()
-            for component in self.components_data:
+            for component in self.all_components:
                 if selected_type == 'Все' or component['type_name'] == selected_type:
                     comp_tree.insert('', 'end', values=(
                         component['name'],
