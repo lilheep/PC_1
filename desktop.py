@@ -6,6 +6,9 @@ import os
 import re
 import json
 
+os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
+os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
+
 class ModernStyle:
     def __init__(self):
         self.primary_color = "#1e3d6d"
@@ -181,43 +184,128 @@ class ModernAuthApp:
 class ForgotPasswordWindow:
     def __init__(self, parent, style):
         self.style = style
+        self.base_url = 'http://127.0.0.1:8000'
+        self.email = None
+        
         self.window = tk.Toplevel(parent)
         self.window.title('Восстановление пароля')
-        self.window.geometry('500x400')
+        self.window.geometry('500x500')
         self.window.configure(bg=self.style.background_color)
         self.window.resizable(False, False)
         self.window.transient(parent)
         self.window.grab_set()
-        self.create_widgets()
-    
-    def create_widgets(self):
-        container = ttk.Frame(self.window, style='Auth.TFrame', padding=30)
-        container.pack(fill='both', expand=True, padx=20, pady=20)
         
-        ttk.Label(container, text='Восстановление пароля', style='Title.TLabel').pack(pady=(0, 10))
-        ttk.Label(container, text='Введите email для восстановления доступа', 
+        self.create_email_step()
+    
+    def create_email_step(self):
+        if hasattr(self, 'current_frame'):
+            self.current_frame.destroy()
+            
+        self.current_frame = ttk.Frame(self.window, style='Auth.TFrame', padding=30)
+        self.current_frame.pack(fill='both', expand=True)
+        
+        ttk.Label(self.current_frame, text='Восстановление пароля', style='Title.TLabel').pack(pady=(0, 10))
+        ttk.Label(self.current_frame, text='Введите email для получения кода подтверждения', 
                  style='Subtitle.TLabel').pack(pady=(0, 30))
         
-        email_frame = ttk.Frame(container, style='Auth.TFrame')
+        email_frame = ttk.Frame(self.current_frame, style='Auth.TFrame')
         email_frame.pack(fill='x', pady=(0, 20))
         
         ttk.Label(email_frame, text='Email', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
         self.email_entry = ttk.Entry(email_frame, style='Modern.TEntry', font=('Arial', 12))
         self.email_entry.pack(fill='x', ipady=8)
         
-        ttk.Button(container, text='Отправить код', 
+        ttk.Button(self.current_frame, text='Отправить код', 
                   command=self.send_code, style='Primary.TButton').pack(fill='x', pady=(0, 10))
         
-        ttk.Button(container, text='Отмена', 
+        ttk.Button(self.current_frame, text='Отмена', 
                   command=self.window.destroy, style='Secondary.TButton').pack(fill='x')
+        
+        self.email_entry.bind('<Return>', lambda e: self.send_code())
+    
+    def create_code_step(self):
+        self.current_frame.destroy()
+        
+        self.current_frame = ttk.Frame(self.window, style='Auth.TFrame', padding=30)
+        self.current_frame.pack(fill='both', expand=True)
+        
+        ttk.Label(self.current_frame, text='Восстановление пароля', style='Title.TLabel').pack(pady=(0, 10))
+        ttk.Label(self.current_frame, text=f'Код отправлен на {self.email}', 
+                 style='Subtitle.TLabel').pack(pady=(0, 30))
+        
+        code_frame = ttk.Frame(self.current_frame, style='Auth.TFrame')
+        code_frame.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(code_frame, text='Код подтверждения', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.code_entry = ttk.Entry(code_frame, style='Modern.TEntry', font=('Arial', 12))
+        self.code_entry.pack(fill='x', ipady=8)
+        
+        password_frame = ttk.Frame(self.current_frame, style='Auth.TFrame')
+        password_frame.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(password_frame, text='Новый пароль', style='Modern.TLabel').pack(anchor='w', pady=(0, 5))
+        self.new_password_entry = ttk.Entry(password_frame, show='*', style='Modern.TEntry', font=('Arial', 12))
+        self.new_password_entry.pack(fill='x', ipady=8)
+        
+        ttk.Button(self.current_frame, text='Сменить пароль', 
+                  command=self.confirm_password_change, style='Primary.TButton').pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(self.current_frame, text='Назад', 
+                  command=self.create_email_step, style='Secondary.TButton').pack(fill='x')
+        
+        self.code_entry.bind('<Return>', lambda e: self.confirm_password_change())
+        self.new_password_entry.bind('<Return>', lambda e: self.confirm_password_change())
     
     def send_code(self):
         email = self.email_entry.get().strip()
+        
         if not email:
             messagebox.showerror('Ошибка!', 'Введите email')
             return
-        messagebox.showinfo('Успех!', f'Код восстановления отправлен на {email}')
-        self.window.destroy()
+            
+        try:
+            response = requests.post(
+                f'{self.base_url}/users/change_password/',
+                params={'email': email}
+            )
+            
+            if response.status_code == 200:
+                self.email = email
+                self.create_code_step()
+            else:
+                error = response.json().get('detail', 'Ошибка отправки кода')
+                messagebox.showerror('Ошибка!', error)
+                
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
+    
+    def confirm_password_change(self):
+        code = self.code_entry.get().strip()
+        new_password = self.new_password_entry.get().strip()
+        
+        if not code or not new_password:
+            messagebox.showerror('Ошибка!', 'Заполните все поля')
+            return
+            
+        try:
+            response = requests.post(
+                f'{self.base_url}/users/confirm_change_password/',
+                params={
+                    'email': self.email,
+                    'code': code,
+                    'new_password': new_password
+                }
+            )
+            
+            if response.status_code == 200:
+                messagebox.showinfo('Успех!', 'Пароль успешно изменен')
+                self.window.destroy()
+            else:
+                error = response.json().get('detail', 'Ошибка смены пароля')
+                messagebox.showerror('Ошибка!', error)
+                
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
 
 class CodeLoginWindow:
     def __init__(self, parent, style, base_url, on_success):
@@ -1196,7 +1284,7 @@ class MainApp:
         
         dialog = tk.Toplevel(self.root)
         dialog.title('Создание заказа')
-        dialog.geometry('300x150')
+        dialog.geometry('300x200')
         dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
@@ -1369,7 +1457,7 @@ class MainApp:
 
         pay_window = tk.Toplevel(self.root)
         pay_window.title('Оплата заказа')
-        pay_window.geometry('800x800')
+        pay_window.geometry('1000x1000')
         pay_window.resizable(False, False)
         pay_window.configure(bg=self.style.background_color)
         pay_window.transient(self.root)
@@ -2280,7 +2368,7 @@ class AdminApp:
     def add_manufacture(self):
         dialog = tk.Toplevel(self.root)
         dialog.title('Добавление производителя')
-        dialog.geometry('300x150')
+        dialog.geometry('300x200')
         dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
