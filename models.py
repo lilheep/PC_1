@@ -7,24 +7,30 @@ import json
 
 
 class JSONField(TextField):
+    """Кастомное поле для хранения JSON-данных в текстовом формате"""
     def db_value(self, value):
+        """Преобразует Python-объект в JSON-строку для хранения в БД"""
         if value is not None:
            return json.dumps(value)
         return None
     def python_value(self, value):
+        """Преобразует JSON-строку из БД в Python-объект"""
         if value is not None:
             return json.loads(value)
         return None 
 
 class BaseModel(Model):
+    """Базовый класс модели для наследования всеми таблицами БД"""
     class Meta:
         database = db_connection
         
 class Roles(BaseModel):
+    """Модель таблицы ролей пользователей"""
     id = AutoField()
     name = CharField(max_length=255, unique=True, null=False)
 
 class Users(BaseModel):
+    """Модель таблицы пользователей системы"""
     id = AutoField()
     name = CharField(max_length=255, null=False)
     email = CharField(max_length=255, null=False)
@@ -34,6 +40,7 @@ class Users(BaseModel):
     address = TextField(null=True)
 
 class PasswordChangeRequest(BaseModel):
+    """Модель таблицы запросов на смену пароля"""
     id = AutoField()
     user = ForeignKeyField(Users, backref='user_change', on_delete='CASCADE', null=False)
     code = CharField(max_length=10)
@@ -41,6 +48,7 @@ class PasswordChangeRequest(BaseModel):
     expires_at = DateTimeField()
 
 class UserToken(BaseModel):
+    """Модель таблицы токенов пользователей для аутентификации"""
     id = AutoField()
     user_id = ForeignKeyField(Users, on_delete='CASCADE', null=False, backref='us_token', on_update='CASCADE')
     token = CharField(max_length=255, null=False)
@@ -48,15 +56,18 @@ class UserToken(BaseModel):
     expires_at = DateTimeField(null=False)
 
 class Manufactures(BaseModel):
+    """Модель таблицы производителей компонентов"""
     id = AutoField()
     name = CharField(max_length=255, null=False, unique=True)
 
 class ComponentsTypes(BaseModel):
+    """Модель таблицы типов компонентов"""
     id = AutoField()
     name = CharField(max_length=255, null=False)
     description = TextField(null=True)
 
 class Components(BaseModel):
+    """Модель таблицы компонентов/запчастей для ПК"""
     id = AutoField()
     name = CharField(max_length=255, null=False)
     type_id = ForeignKeyField(ComponentsTypes, on_delete='SET NULL', null=True, backref='type_comp', on_update='CASCADE')
@@ -66,6 +77,7 @@ class Components(BaseModel):
     specification = JSONField(null=True)
 
 class Configurations(BaseModel):
+    """Модель таблицы конфигураций ПК, создаваемых пользователями"""
     id = AutoField()
     user_id = ForeignKeyField(Users, on_delete='CASCADE', backref='user_config', on_update='CASCADE')
     name_config = CharField(max_length=255, null=True)
@@ -73,16 +85,19 @@ class Configurations(BaseModel):
     created_at = DateField(default=datetime.datetime.now())
 
 class ConfigurationsComponents(BaseModel):
+    """Модель таблицы связи конфигураций и компонентов (многие-ко-многим)"""
     id = AutoField()
     configuration_id = ForeignKeyField(Configurations, on_delete='CASCADE', backref='config_components', on_update='CASCADE')
     components_id = ForeignKeyField(Components, on_delete='CASCADE', backref='component_config', on_update='CASCADE')
     quantity = IntegerField(null=False, default=1)
 
 class OrdersStatus(BaseModel):
+    """Модель таблицы статусов заказов"""
     id = AutoField()
     name = CharField(max_length=255, null=False, unique=True)
 
 class Orders(BaseModel):
+    """Модель таблицы заказов"""
     id = AutoField()
     user_id = ForeignKeyField(Users, on_delete='CASCADE', backref='order_user', on_update='CASCADE')
     order_date = DateTimeField(null=False, default=datetime.datetime.now())
@@ -90,6 +105,7 @@ class Orders(BaseModel):
     status_id = ForeignKeyField(OrdersStatus, on_delete='CASCADE', backref='order_status', on_update='CASCADE')
 
 class OrderConfigurations(BaseModel):
+    """Модель таблицы связи заказов и конфигураций (многие-ко-многим)"""
     id = AutoField()
     order_id = ForeignKeyField(Orders, on_delete='CASCADE', backref='order_config', on_update='CASCADE')
     configuration_id = ForeignKeyField(Configurations, on_delete='CASCADE', backref='config_con', on_update='CASCADE')
@@ -110,6 +126,7 @@ tables = [Roles,
           OrderConfigurations]
 
 def init_tables():
+    """Инициализация и создание всех таблиц в базе данных"""
     try:
         db_connection.create_tables(tables, safe=True)
         print(f'Таблицы успешно созданы. Количество: {len(tables)}.')
@@ -117,6 +134,7 @@ def init_tables():
         print(f'Ошибка при создании таблиц: {e}.')
         
 def create_roles():
+    """Создание тестовых ролей пользователей"""
     try:
         if Roles.select().count() > 1:
             print('Тестовые роли уже созданы.')
@@ -138,6 +156,7 @@ def create_roles():
         print(f'Ошибка при создании ролей: {e}')
 
 def create_users():
+    """Создание тестовых пользователей системы"""
     try:
         if Users.select().count() > 4:
             print("Тестовые пользователи уже созданы")
@@ -193,6 +212,7 @@ def create_users():
         print(f"Ошибка при создании пользователей: {e}")
 
 def create_manufactures():
+    """Создание тестовых производителей компонентов"""
     try:
         if Manufactures.select().count() > 4:
             print("Тестовые производители уже созданы.")
@@ -220,6 +240,7 @@ def create_manufactures():
     except Exception as e:
         print(f"Ошибка при создании производителей: {e}")
 def create_componentstypes():
+    """Создание тестовых типов компонентов"""
     try:
         if ComponentsTypes.select().count()>4:
             print("Тестовые комплектующиеуже созданы.")
@@ -277,6 +298,7 @@ def create_componentstypes():
         print(f"Ошибка при создании комплектующих: {e}")
 
 def create_components():
+    """Создание тестовых компонентов/запчастей"""
     try:
         if Components.select().count() > 9:
             print("Тестовые компоненты уже созданы.")
@@ -423,6 +445,7 @@ def create_components():
     except Exception as e:
         print(f"Ошибка при создании компонентов: {e}")
 def create_configurations():
+    """Создание тестовых конфигураций ПК"""
     try:
         if Configurations.select().count() > 2:
             print("Тестовые конфигурации уже созданы.")
@@ -463,6 +486,7 @@ def create_configurations():
         print(f"Ошибка при создании конфигураций: {e}")
         
 def create_configurations_components():
+    """Создание тестовых связей между конфигурациями и компонентами"""
     try:
         if ConfigurationsComponents.select().count() > 5:
             print("Тестовые связи конфигураций с компонентами уже созданы.")
@@ -559,6 +583,7 @@ def create_configurations_components():
     except Exception as e:
         print(f"Ошибка при создании связей конфигураций с компонентами: {e}")
 def create_orders_status():
+    """Создание тестовых статусов заказов"""
     try:
         if OrdersStatus.select().count() > 2:
             print("Тестовые статусы заказов уже созданы.")
@@ -592,6 +617,7 @@ def create_orders_status():
         print(f"Ошибка при создании статусов заказов: {e}")
 
 def create_orders():
+    """Создание тестовых заказов"""
     try:
         if Orders.select().count() > 2:
             print("Тестовые заказы уже созданы.")
@@ -632,6 +658,7 @@ def create_orders():
         print(f"Ошибка при создании заказов: {e}")
 
 def create_order_configurations():
+    """Создание тестовых связей между заказами и конфигурациями"""
     try:
         if OrderConfigurations.select().count() > 2:
             print("Тестовые связи заказов с конфигурациями уже созданы.")

@@ -26,6 +26,7 @@ EMAIL_REGEX = r'^[A-Za-zА-Яа-яЁё0-9._%+-]+@[A-Za-zА-Яа-яЁё-]+\.[A-Za
 PHONE_REGEX = r'^[0-9+()\-#]{10,15}$'
 
 def get_user_by_token(token: str, required_role: Optional[str] = None) -> Users:
+    """Получение пользователя по токену с проверкой роли и срока действия"""
     try:
         user_token = (UserToken.select().join(Users).where(
             (UserToken.token==token) &
@@ -53,7 +54,7 @@ def get_user_by_token(token: str, required_role: Optional[str] = None) -> Users:
         raise HTTPException(500, f'Ошибка при проверке токена: {e}')
     
 def get_component_type_by_name(type_name: str):
-    """Получение имени типа компонента"""
+    """Получение типа компонента по названию"""
     if not type_name:
         return None
     component_type = ComponentsTypes.select().where(ComponentsTypes.name==type_name).first()
@@ -62,7 +63,7 @@ def get_component_type_by_name(type_name: str):
     return component_type
 
 def get_manufacture_by_name(manufacture_name: str):
-    """Получение названия производителя"""
+    """Получение производителя по названию"""
     if not manufacture_name:
         return None
     manufacture = Manufactures.select().where(Manufactures.name==manufacture_name).first()
@@ -71,24 +72,29 @@ def get_manufacture_by_name(manufacture_name: str):
     return manufacture
 
 class AuthRequest(BaseModel):
+    """Модель запроса для аутентификации"""
     email: str | None = None
     phone: str | None = None
     password: str
 
 class SetRoleRequest(BaseModel):
+    """Модель запроса для изменения роли пользователя"""
     email: str | None = None
     phone: str | None = None
     new_role: str
 
 class ComponentsTypesCreate(BaseModel):
+    """Модель запроса для создания типа компонента"""
     name: str
     description: str | None = None
 
 class ComponentsTypesEdit(BaseModel):
+    """Модель запроса для изменения типа компонента"""
     new_name: str | None = None
     description: str | None = None
 
 class ComponentCreate(BaseModel):
+    """Модель запроса для создания компонента"""
     name: str
     type_name: Optional[str] = None
     manufacture_name: Optional[str] = None
@@ -97,6 +103,7 @@ class ComponentCreate(BaseModel):
     specification: List[Dict[str, Any]] = None
 
 class ComponentsEdit(BaseModel):
+    """Модель запроса для изменения компонента"""
     new_name: Optional[str] = None
     type_name: Optional[str] = None
     manufacture_name: Optional[str] = None
@@ -105,41 +112,50 @@ class ComponentsEdit(BaseModel):
     specification: List[Dict[str, Any]] = None
     
 class ConfigurationCreate(BaseModel):
+    """Модель запроса для создания конфигурации"""
     name_config: Optional[str] = None
     description: Optional[str] = None
 
 class ConfigurationEdit(BaseModel):
+    """Модель запроса для изменения конфигурации"""
     name_config: Optional[str] = None
     description: Optional[str] = None
 
 class ConfigComponentCreate(BaseModel):
+    """Модель запроса для добавления компонента в конфигурацию"""
     component_name: str
     quantity: int = 1
 
 class ConfigComponentEdit(BaseModel):
+    """Модель запроса для изменения компонента в конфигурации"""
     quantity: int
 
 class OrderCreate(BaseModel):
+    """Модель запроса для создания заказа"""
     configuration_id: int
     quantity: int = 1
 
 class OrderStatusUpdate(BaseModel):
+    """Модель запроса для обновления статуса заказа"""
     status_id: int
 
 class OrderConfigCreate(BaseModel):
+    """Модель запроса для добавления конфигурации в заказ"""
     configuration_id: int
     quantity: int = 1
 
 class OrderConfigUpdate(BaseModel):
+    """Модель запроса для обновления конфигурации в заказе"""
     quantity: int
 
 class UserSearch(BaseModel):
+    """Модель запроса для поиска пользователя"""
     email: str | None = None
     phone: str | None = None
     
 @app.post('/users/register/', tags=['Users'])
 async def create_user(email: str, password: str, full_name: str, number_phone: str, address: str):
-    """"Регистрация нового пользователя"""
+    """Регистрация нового пользователя в системе"""
     if not re.fullmatch(EMAIL_REGEX, email) or not re.fullmatch(PHONE_REGEX, number_phone):
         raise HTTPException(400, 'Неверный формат данных email/номера телефона')
     try:
@@ -167,7 +183,7 @@ async def create_user(email: str, password: str, full_name: str, number_phone: s
     
 @app.post('/users/auth/', tags=['Users'])
 async def auth_user(data: AuthRequest):
-    """Аутентификация пользователя"""
+    """Аутентификация пользователя по email или телефону с паролем"""
     email = data.email
     phone = data.phone
     password = data.password
@@ -214,7 +230,7 @@ async def auth_user(data: AuthRequest):
 
 @app.post('/users/change_password/', tags=['Users'])
 async def request_change_password(email: str):
-    """Запрос на смену пароля"""
+    """Запрос на смену пароля с отправкой кода подтверждения на email"""
     user = Users.select().where(Users.email==email).first()
     if not user:
         raise HTTPException(404, 'Пользователь с указанным email не найден.')
@@ -236,7 +252,7 @@ async def request_change_password(email: str):
 
 @app.post('/users/confirm_change_password/', tags=['Users'])
 async def confirm_change_password(email: str, code: str, new_password: str):
-    """Подтверждение и установка нового пароля"""
+    """Подтверждение смены пароля с помощью кода из email"""
     user = Users.select().where(Users.email==email).first()
     if not user:
         raise HTTPException(404, 'Пользователь с указанным email не найден.')
@@ -265,7 +281,7 @@ async def confirm_change_password(email: str, code: str, new_password: str):
 
 @app.post('/users/request_login_code/', tags=['Users'])
 async def request_login_code(email: str):
-    """Запрос кода для входа по email"""
+    """Запрос кода для входа в систему через email"""
     if not re.fullmatch(EMAIL_REGEX, email):
         raise HTTPException(400, 'Неверный формат email.')
     
@@ -292,7 +308,7 @@ async def request_login_code(email: str):
 
 @app.post('/users/confirm_login_code/', tags=['Users'])
 async def confirm_login_code(email: str, code: str):
-    """Подтверждение входа по коду"""
+    """Подтверждение входа в систему с помощью кода из email"""
     user = Users.select().where(Users.email==email).first()
     if not user:
         raise HTTPException(404, 'Пользователь с указанным email не найден.')
@@ -324,7 +340,7 @@ async def confirm_login_code(email: str, code: str):
 
 @app.get('/users/me/', tags=['Users'])
 async def get_profile(token: str = Header(...)):
-    """Получение своей информации пользователем"""
+    """Получение информации о текущем пользователе"""
     try:
         user = get_user_by_token(token)
         if not user:
@@ -345,7 +361,7 @@ async def get_profile(token: str = Header(...)):
 
 @app.get('/users/get_all/', tags=['Users'])
 async def get_all_users(token: str = Header(...)):
-    """Получение всех пользователей администратором"""
+    """Получение списка всех пользователей (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     
     if not current_user:
@@ -365,6 +381,7 @@ async def get_all_users(token: str = Header(...)):
 
 @app.delete('/users/delete_profile/', tags=['Users'])
 async def delete_profile(token: str = Header(...)):
+    """Удаление профиля текущего пользователя"""
     user = get_user_by_token(token)
     if not user:
         raise HTTPException(401, 'Не удалось найти пользователя.')
@@ -373,7 +390,7 @@ async def delete_profile(token: str = Header(...)):
 
 @app.put('/users/edit_address/', tags=['Users'])
 async def edit_user_address(new_address: str, token: str = Header(...)):
-    """Изменение адреса пользователем"""
+    """Изменение адреса текущего пользователя"""
     current_user = get_user_by_token(token, 'Пользователь')
     try:
         if not current_user:
@@ -396,7 +413,7 @@ async def edit_user_address(new_address: str, token: str = Header(...)):
     
 @app.post('/users/set_role/', tags=['Users'])
 async def set_role_user(data: SetRoleRequest, token: str = Header(...)):
-    """Изменение роли пользователей администратором"""
+    """Изменение роли пользователя (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     try:
         if not data.email and not data.phone:
@@ -430,7 +447,7 @@ async def set_role_user(data: SetRoleRequest, token: str = Header(...)):
 
 @app.post("/users/get_user_by_email_or_phone/", tags=['Users'])
 async def get_user_by_login(data: UserSearch, token: str = Header(...)):
-    """Для поиска админом конкретного пользователя"""
+    """Поиск пользователя по email или телефону (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
             raise HTTPException(401, 'Недействительный токен.')
@@ -465,7 +482,7 @@ async def get_user_by_login(data: UserSearch, token: str = Header(...)):
 
 @app.post('/manufactures/add_manufacture/', tags=['Manufactures'])
 async def create_manufactrue(name: str, token: str = Header(...)):
-    """Создание производетеля"""
+    """Создание нового производителя (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -482,7 +499,7 @@ async def create_manufactrue(name: str, token: str = Header(...)):
 
 @app.put('/manufactures/edit_manufactures/', tags=['Manufactures'])
 async def edit_manufactures(manufacture_id: int, new_name: str, token: str = Header(...)):
-    """Изменение названия производителя"""
+    """Изменение названия производителя (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -504,7 +521,7 @@ async def edit_manufactures(manufacture_id: int, new_name: str, token: str = Hea
 
 @app.get('/manufactures/get_manufactures_by_id/', tags=['Manufactures'])
 async def get_manufacture_by_id(manufacture_id: int, token: str = Header(...)):
-    """Получение данных о конкретном производителе"""
+    """Получение информации о производителе по ID (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -525,7 +542,7 @@ async def get_manufacture_by_id(manufacture_id: int, token: str = Header(...)):
 
 @app.get('/manufactures/get_manufactures/', tags=['Manufactures'])
 async def get_all_manufactures(token: str = Header(...)):
-    """Получении данных о всех производителях"""
+    """Получение списка всех производителей"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -545,7 +562,7 @@ async def get_all_manufactures(token: str = Header(...)):
 
 @app.delete('/manufactures/del_manufacture_by_id/', tags=['Manufactures'])
 async def delete_manufacture(manufacture_id: int, token: str = Header(...)):
-    """Удаление выбранного производителя"""
+    """Удаление производителя (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -565,7 +582,7 @@ async def delete_manufacture(manufacture_id: int, token: str = Header(...)):
         
 @app.get('/components_types/get_all/', tags=['Components Types'])
 async def get_all_cp(token: str = Header(...)):
-    """Получение данных о всех типах компонентов"""
+    """Получение списка всех типов компонентов"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -584,7 +601,7 @@ async def get_all_cp(token: str = Header(...)):
 
 @app.get('/components_types/get_by_id/', tags=['Components Types'])
 async def get_cp_by_id(cp_id: int, token: str = Header(...)):
-    """Получение данных о выбранном типе компонента"""
+    """Получение информации о типе компонента по ID (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -607,7 +624,7 @@ async def get_cp_by_id(cp_id: int, token: str = Header(...)):
 
 @app.post('/components_types/create_cp/', tags=['Components Types'])
 async def create_cp(data: ComponentsTypesCreate, token: str = Header(...)):
-    """Создание типа компонента"""
+    """Создание нового типа компонента (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -635,7 +652,7 @@ async def create_cp(data: ComponentsTypesCreate, token: str = Header(...)):
 
 @app.put('/components_types/edit_cp_by_id/', tags=['Components Types'])
 async def edit_cp(cp_id: int, data: ComponentsTypesEdit, token: str = Header(...)):
-    """Изменение данных о типе компонента"""
+    """Изменение типа компонента (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -658,10 +675,10 @@ async def edit_cp(cp_id: int, data: ComponentsTypesEdit, token: str = Header(...
     
 @app.delete('/components_types/delete_cp_by_id/', tags=['Components Types'])
 async def delete_cp(cp_id: int, token: str = Header(...)):
-    """Удаление типа компонента"""
+    """Удаление типа компонента (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
-        raise HTTPException(401, 'Недействительный токен.')
+        raise HTTPException(401, 'Недействительный токen.')
     
     try:
         component_type = ComponentsTypes.select().where(ComponentsTypes.id==cp_id).first()
@@ -678,7 +695,7 @@ async def delete_cp(cp_id: int, token: str = Header(...)):
     
 @app.get('/components/get_all/', tags=['Components'])
 async def get_all_components(token: str = Header(...)):
-    """Получение данных о всех компонентах"""
+    """Получение списка всех компонентов"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -703,7 +720,7 @@ async def get_all_components(token: str = Header(...)):
 
 @app.get('/components/get_by_id/', tags=['Components'])
 async def get_component_by_id(component_id: int, token: str = Header(...)):
-    """Получение данных о выбранном компоненте"""
+    """Получение информации о компоненте по ID"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -729,7 +746,7 @@ async def get_component_by_id(component_id: int, token: str = Header(...)):
 
 @app.post('/components/create/', tags=['Components'])
 async def create_component(data: ComponentCreate, token: str = Header(...)):
-    """Создание компонента"""
+    """Создание нового компонента (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -760,7 +777,7 @@ async def create_component(data: ComponentCreate, token: str = Header(...)):
 
 @app.put('/components/edit_by_id/', tags=['Components'])
 async def edit_component(component_id: int, data: ComponentsEdit, token: str = Header(...)):
-    """Изменение данных о компоненте"""
+    """Изменение компонента (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -808,7 +825,7 @@ async def edit_component(component_id: int, data: ComponentsEdit, token: str = H
 
 @app.delete('/components/delete_by_id/', tags=['Components'])
 async def delete_component(component_id: int, token: str = Header(...)):
-    """Удаление компонента"""
+    """Удаление компонента (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -850,7 +867,7 @@ async def get_all_configurations(token: str = Header(...)):
     
 @app.get('/configurations/get_by_id/', tags=['Configurations'])
 async def get_configuration_by_id(config_id: int, token: str = Header(...)):
-    """Получение конкретной конфигурации"""
+    """Получение конфигурации по ID для текущего пользователя"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -906,7 +923,7 @@ async def create_configuration(data: ConfigurationCreate, token: str = Header(..
 
 @app.put('/configurations/edit_by_id/', tags=['Configurations'])
 async def edit_configuration(config_id: int, data: ConfigurationEdit, token: str = Header(...)):
-    """Изменение конфигурации"""
+    """Изменение конфигурации текущего пользователя"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -944,7 +961,7 @@ async def edit_configuration(config_id: int, data: ConfigurationEdit, token: str
 
 @app.delete('/configurations/delete_by_id/', tags=['Configurations'])
 async def delete_configuration(config_id: int, token: str = Header(...)):
-    """Удаление конфигурации"""
+    """Удаление конфигурации текущего пользователя"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1132,7 +1149,7 @@ async def update_configuration_component(
     data: ConfigComponentEdit, 
     token: str = Header(...)
 ):
-    """Изменение количества компонентов в конфигурации"""
+    """Изменение количества компонента в конфигурации"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1202,7 +1219,7 @@ async def delete_component_in_configuration(
 
 @app.get('/configurations/admin/{config_id}/components/', tags=['Configurations Components'])
 async def admin_get_configuration_components(config_id: int, token: str = Header(...)):
-    """Получение компонентов любой конфигурации (для администратора)"""
+    """Получение компонентов любой конфигурации (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1237,7 +1254,7 @@ async def admin_remove_component_from_configuration(
     component_id: int, 
     token: str = Header(...)
 ):
-    """Удаление компонента из любой конфигурации (для администратора)"""
+    """Удаление компонента из любой конфигурации (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1309,7 +1326,7 @@ async def create_order_status(name: str, token: str = Header(...)):
 
 @app.put('/status_order/edit_status', tags=['Orders Statuses'])
 async def edit_order_status(id: int, new_name: str, token: str = Header(...)):
-    """Изменение статуса заказа"""
+    """Изменение статуса заказа (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1332,7 +1349,7 @@ async def edit_order_status(id: int, new_name: str, token: str = Header(...)):
 
 @app.delete('/status_order/delete_status', tags=['Orders Statuses'])
 async def delete_order_status(id: int, token: str = Header(...)):
-    """Удаление статуса заказа"""
+    """Удаление статуса заказа (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.') 
@@ -1394,7 +1411,7 @@ async def get_user_orders(token: str = Header(...)):
 
 @app.put('/orders/user/update_order_status/', tags=['Orders'])
 async def user_update_order_status(order_id: int, new_status: str, token: str = Header(...)):
-    """Изменение статуса заказа пользователем (только для оплаты)"""
+    """Изменение статуса заказа пользователем (только на "Оплачен")"""
     current_user = get_user_by_token(token, 'Пользователь')
     
     try:
@@ -1429,7 +1446,7 @@ async def user_update_order_status(order_id: int, new_status: str, token: str = 
 
 @app.get('/orders/get_order_by_id/', tags=['Orders'])
 async def get_order_detail(order_id: int, token: str = Header(...)):
-    """Получение деталей заказа"""
+    """Получение деталей заказа по ID"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1473,7 +1490,7 @@ async def get_order_detail(order_id: int, token: str = Header(...)):
 
 @app.post('/orders/create_order/', tags=['Orders'])
 async def create_order(data: OrderCreate, token: str = Header(...)):
-    """Создание нового заказа"""
+    """Создание нового заказа на основе конфигурации"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1558,7 +1575,7 @@ async def cancel_order(order_id: int, token: str = Header(...)):
 
 @app.get('/orders/admin/get_all', tags=['Orders'])
 async def admin_get_all_orders(token: str = Header(...)):
-    """Получение всех заказов (админ)"""
+    """Получение всех заказов (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1602,7 +1619,7 @@ async def admin_get_all_orders(token: str = Header(...)):
 
 @app.put('/orders/admin/edit_order_status/', tags=['Orders'])
 async def admin_update_order_status(order_id: int, data: OrderStatusUpdate, token: str = Header(...)):
-    """Изменение статуса заказа (админ)"""
+    """Изменение статуса заказа (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1632,7 +1649,7 @@ async def admin_update_order_status(order_id: int, data: OrderStatusUpdate, toke
 
 @app.delete('/orders/admin/delete_order/', tags=['Orders'])
 async def admin_delete_order(order_id: int, token: str = Header(...)):
-    """Удаление заказа администратором"""
+    """Удаление заказа (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1661,7 +1678,7 @@ async def admin_delete_order(order_id: int, token: str = Header(...)):
 
 @app.get('/order_configurations/get_user_order_config/', tags=['Order Configurations'])
 async def get_order_configurations(order_id: int, token: str = Header(...)):
-    """Получение конфигураций заказа"""
+    """Получение конфигураций заказа для текущего пользователя"""
     current_user = get_user_by_token(token, 'Пользователь')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1703,7 +1720,7 @@ async def add_configuration_to_order(
     data: OrderConfigCreate, 
     token: str = Header(...)
 ):
-    """Добавление конфигурации в заказ (админ)"""
+    """Добавление конфигурации в заказ (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1766,7 +1783,7 @@ async def update_order_configuration(
     data: OrderConfigUpdate, 
     token: str = Header(...)
 ):
-    """Изменение количества конфигурации в заказе (админ)"""
+    """Изменение количества конфигурации в заказе (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1805,7 +1822,7 @@ async def update_order_configuration(
 
 @app.delete('/order_configurations/admin/delete_order_config/', tags=['Order Configurations'])
 async def remove_configuration_from_order(config_id: int, token: str = Header(...)):
-    """Удаление конфигурации из заказа (админ)"""
+    """Удаление конфигурации из заказа (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1842,7 +1859,7 @@ async def remove_configuration_from_order(config_id: int, token: str = Header(..
 
 @app.get('/order_configurations/admin/get_all/', tags=['Order Configurations'])
 async def admin_get_all_order_configurations(token: str = Header(...)):
-    """Получение всех связей заказов и конфигураций (админ)"""
+    """Получение всех связей заказов и конфигураций (только для администратора)"""
     current_user = get_user_by_token(token, 'Администратор')
     if not current_user:
         raise HTTPException(401, 'Недействительный токен.')
@@ -1878,6 +1895,3 @@ async def admin_get_all_order_configurations(token: str = Header(...)):
         raise http_exc
     except Exception as e:
         raise HTTPException(500, f'Ошибка при получении связей заказов и конфигураций: {e}')
-
-
-    

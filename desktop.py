@@ -10,6 +10,7 @@ os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python
 os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
 
 class ModernStyle:
+    """Стиль оформления приложения с цветовой схемой и параметрами"""
     def __init__(self):
         self.primary_color = "#1e3d6d"
         self.secondary_color = "#2d5ba9"
@@ -24,6 +25,7 @@ class ModernStyle:
         self.border_radius = 8
 
 class ModernAuthApp:
+    """Основное приложение авторизации с GUI интерфейсом"""
     def __init__(self, root):
         self.root = root
         self.root.title('ANTech - Авторизация')
@@ -39,6 +41,7 @@ class ModernAuthApp:
         self.token = None
     
     def setup_styles(self):
+        """Настройка стилей виджетов приложения"""   
         style = ttk.Style()
         style.configure('Modern.TFrame', background=self.style.background_color)
         style.configure('Auth.TFrame', background=self.style.surface_color)
@@ -90,6 +93,7 @@ class ModernAuthApp:
         CodeLoginWindow(self.root, self.style, self.base_url, self.on_code_login_success)
     
     def create_auth_widgets(self):
+        """Создает виджеты для окна авторизации"""
         auth_container = ttk.Frame(self.main_frame, style='Auth.TFrame', padding=40)
         auth_container.pack(padx=20, pady=20)
         
@@ -139,10 +143,12 @@ class ModernAuthApp:
         RegistrationWindow(self.root, self.style, self.base_url)
     
     def is_phone(self, text):
+        """Проверяет, является ли текст телефонным номером"""
         phone_pattern = r'^[\d\s\-\+\(\)]+$'
         return bool(re.match(phone_pattern, text)) and len(text) >= 5
         
     def login(self):
+        """Выполняет авторизацию пользователя"""
         login = self.login_entry.get().strip()
         password = self.password_entry.get().strip()
     
@@ -173,15 +179,18 @@ class ModernAuthApp:
             messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
     
     def open_main_app(self):
+        """Открывает основное приложение после успешной авторизации"""
         self.root.destroy()
         root = tk.Tk()
         MainApp(root, self.token)
         root.mainloop()
        
     def show_forgot_password(self):
+        """Показывает окно восстановления пароля"""
         ForgotPasswordWindow(self.root, self.style)
 
 class ForgotPasswordWindow:
+    """Окно восстановления пароля пользователя"""
     def __init__(self, parent, style):
         self.style = style
         self.base_url = 'http://127.0.0.1:8000'
@@ -198,6 +207,7 @@ class ForgotPasswordWindow:
         self.create_email_step()
     
     def create_email_step(self):
+        """Создает интерфейс для ввода email"""
         if hasattr(self, 'current_frame'):
             self.current_frame.destroy()
             
@@ -224,6 +234,7 @@ class ForgotPasswordWindow:
         self.email_entry.bind('<Return>', lambda e: self.send_code())
     
     def create_code_step(self):
+        """Создает интерфейс для ввода кода подтверждения"""
         self.current_frame.destroy()
         
         self.current_frame = ttk.Frame(self.window, style='Auth.TFrame', padding=30)
@@ -257,6 +268,7 @@ class ForgotPasswordWindow:
         self.new_password_entry.bind('<Return>', lambda e: self.confirm_password_change())
     
     def send_code(self):
+        """Отправляет код подтверждения на email"""
         email = self.email_entry.get().strip()
         
         if not email:
@@ -280,6 +292,7 @@ class ForgotPasswordWindow:
             messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
     
     def confirm_password_change(self):
+        """Подтверждает смену пароля с помощью кода"""
         code = self.code_entry.get().strip()
         new_password = self.new_password_entry.get().strip()
         
@@ -308,6 +321,7 @@ class ForgotPasswordWindow:
             messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
 
 class CodeLoginWindow:
+    """Окно входа по одноразовому коду"""
     def __init__(self, parent, style, base_url, on_success):
         self.style = style
         self.base_url = base_url
@@ -428,6 +442,7 @@ class CodeLoginWindow:
             messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
 
 class RegistrationWindow:
+    """Окно регистрации нового пользователя"""
     def __init__(self, parent, style, base_url):
         self.style = style
         self.base_url = base_url
@@ -443,6 +458,7 @@ class RegistrationWindow:
         self.create_widgets()
     
     def create_widgets(self):
+        """Создает виджеты для регистрации"""
         container = ttk.Frame(self.window, style='Auth.TFrame', padding=30)
         container.pack(fill='both', expand=True)
         
@@ -494,6 +510,7 @@ class RegistrationWindow:
         self.address_entry.bind('<Return>', lambda e: self.register())
     
     def register(self):
+        """Выполняет регистрацию нового пользователя"""
         name = self.name_entry.get().strip()
         email = self.email_entry.get().strip()
         phone = self.phone_entry.get().strip()
@@ -527,6 +544,7 @@ class RegistrationWindow:
             messagebox.showerror('Ошибка!', f'Не удалось подключиться к серверу: {e}')
 
 class MainApp:
+    """Основное приложение после авторизации"""
     def __init__(self, root, token):
         self.root = root
         self.root.title('ANTech - Конфигуратор ПК')
@@ -555,6 +573,7 @@ class MainApp:
         self.init_profile_tab()
     
     def setup_styles(self):
+        """Настройка стилей виджетов"""
         style = ttk.Style()
         style.configure('Modern.TFrame', background=self.style.background_color)
         style.configure('Surface.TFrame', background=self.style.surface_color)
@@ -616,6 +635,7 @@ class MainApp:
                        foreground=self.style.text_primary)
     
     def create_header(self):
+        """Создает заголовок приложения"""
         header_frame = ttk.Frame(self.main_container, style='Surface.TFrame', padding=20)
         header_frame.pack(fill='x', padx=20, pady=10)
         
@@ -631,6 +651,7 @@ class MainApp:
                   command=self.logout, style='Secondary.TButton').pack(side='right')
     
     def create_tabs(self):
+        """Создает вкладки интерфейса"""
         tab_control = ttk.Notebook(self.main_container, style='Modern.TNotebook')
         
         self.tab_catalog = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
@@ -646,6 +667,7 @@ class MainApp:
         tab_control.pack(fill='both', expand=True, padx=20, pady=10)
 
     def load_user_data(self):
+        """Загружает данные пользователя"""
         try:
             headers = {'token': self.token}
             response = requests.get(f'{self.base_url}/users/me/', headers=headers)
@@ -659,16 +681,19 @@ class MainApp:
             self.logout()
     
     def logout(self):
+        """Выполняет выход из системы"""
         for widget in self.root.winfo_children():
             widget.destroy()
         ModernAuthApp(self.root)
     
     def open_admin_app(self):
+        """Открывает административную панель"""
         for widget in self.root.winfo_children():
             widget.destroy()
         AdminApp(self.root, self.token)
     
     def init_catalog_tab(self):
+        """Инициализирует вкладку каталога компонентов"""
         ttk.Label(self.tab_catalog, text='Каталог компонентов', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
         
         filter_container = ttk.Frame(self.tab_catalog, style='Surface.TFrame', padding=15)
@@ -773,6 +798,7 @@ class MainApp:
         self.load_components()
 
     def load_components(self):
+        """Загружает список компонентов"""
         try:
             headers = {'token': self.token}
             response = requests.get(f'{self.base_url}/components/get_all/', headers=headers)
@@ -801,6 +827,7 @@ class MainApp:
             messagebox.showerror('Ошибка!', f'Не удалось получить данные от сервера: {e}')
     
     def apply_filters(self):
+        """Применяет фильтры к каталогу"""
         if not hasattr(self, 'all_components') or not self.all_components:
             return
         
@@ -838,6 +865,7 @@ class MainApp:
         self.display_filtered_components()
 
     def reset_filters(self):
+        """Сбрасывает фильтры каталога"""
         self.type_filter.set('')
         self.min_price_filter.set('')
         self.max_price_filter.set('')
@@ -846,6 +874,7 @@ class MainApp:
         self.display_filtered_components()
 
     def display_filtered_components(self):
+        """Отображает отфильтрованные компоненты"""
         for item in self.tree.get_children():
             self.tree.delete(item)
         
@@ -860,16 +889,19 @@ class MainApp:
             ))
     
     def search_components(self):
+        """Выполняет поиск компонентов"""
         self.apply_filters()
         
         if self.search_var.get().strip():
             messagebox.showinfo('Поиск', f'Найдено компонентов: {len(self.filtered_components)}')
 
     def clear_search(self):
+        """Очищает поисковый запрос"""
         self.search_var.set('')
         self.apply_filters()
 
     def update_components_table(self, components):
+        """Обновляет таблицу компонентов"""
         for item in self.tree.get_children():
             self.tree.delete(item)
 
@@ -886,6 +918,7 @@ class MainApp:
         self.filtered_components_data = components
     
     def show_component_specification(self, event):
+        """Показывает спецификацию выбранного компонента"""
         selected_item = self.tree.selection()
         if not selected_item:
             return
@@ -915,6 +948,7 @@ class MainApp:
         self.spec_text.config(state='disabled')
     
     def init_configurations_tab(self):
+        """Инициализирует вкладку конфигураций"""
         main_frame = ttk.Frame(self.tab_configurations, style='Surface.TFrame')
         main_frame.pack(fill='both', expand=True)
         ttk.Label(main_frame, text='Мои конфигурации ПК', style='Header.TLabel').pack(anchor='w', pady=(0, 20))
@@ -1004,6 +1038,7 @@ class MainApp:
         self.load_configurations()
 
     def load_configurations(self):
+        """Загружает список конфигураций"""
         try:
             headers = {'token': self.token}
             response = requests.get(f'{self.base_url}/configurations/get_all/', headers=headers)
@@ -1038,6 +1073,7 @@ class MainApp:
             messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
 
     def on_configuration_select(self, event):
+        """Обрабатывает выбор конфигурации"""
         selected = self.config_tree.selection()
         if not selected:
             return
@@ -1049,6 +1085,7 @@ class MainApp:
         self.load_configuration_components(config_id)
 
     def load_configuration_components(self, config_id):
+        """Загружает компоненты выбранной конфигурации"""
         try:
             headers = {'token': self.token}
             response = requests.get(f'{self.base_url}/configurations/{config_id}/components/', headers=headers)
@@ -1079,6 +1116,7 @@ class MainApp:
             messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
 
     def on_component_select(self, event):
+        """Обрабатывает выбор компонента"""
         self.selected_component_id = None
         selected = self.config_components_tree.selection()
         if selected:
@@ -1086,6 +1124,7 @@ class MainApp:
             self.selected_component_id = self.config_components_tree.item(item)['tags'][0]
 
     def create_new_configuration(self):
+        """Создает новую конфигурацию"""
         dialog = tk.Toplevel(self.root)
         dialog.title('Создание новой конфигурации')
         dialog.geometry('500x300')
@@ -1105,6 +1144,7 @@ class MainApp:
         desc_entry.pack(fill='x', pady=5)
         
         def create_config():
+            """Создает запрос на создание конфигурации"""
             name = name_entry.get().strip()
             description = desc_entry.get().strip()
             
@@ -1137,6 +1177,7 @@ class MainApp:
         ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
 
     def add_component_to_config(self):
+        """Добавляет компонент в конфигурацию"""
         if not hasattr(self, 'current_config_id') or not self.current_config_id:
             messagebox.showwarning('Внимание!', 'Выберите конфигурацию для добавления компонентов')
             return
@@ -1147,7 +1188,7 @@ class MainApp:
         
         dialog = tk.Toplevel(self.root)
         dialog.title('Добавление компонента')
-        dialog.geometry('600x400')
+        dialog.geometry('600x600')
         dialog.configure(bg=self.style.background_color)
         dialog.transient(self.root)
         dialog.grab_set()
@@ -1199,6 +1240,7 @@ class MainApp:
         quantity_spin.pack(side='left', padx=5)
         
         def filter_components():
+            """Фильтрация компонентов по типу"""
             for item in comp_tree.get_children():
                 comp_tree.delete(item)
             
@@ -1214,6 +1256,7 @@ class MainApp:
                     ), tags=(component['name'],))
         
         def add_selected_component():
+            """Добавление компонента в конфигурацию"""
             selected = comp_tree.selection()
             if not selected:
                 messagebox.showwarning('Внимание!', 'Выберите компонент')
@@ -1253,6 +1296,7 @@ class MainApp:
         ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
 
     def remove_component_from_config(self):
+        """Удаляет компонент из конфигурации"""
         if not hasattr(self, 'current_config_id') or not self.current_config_id:
             messagebox.showwarning('Внимание!', 'Выберите конфигурацию')
             return
@@ -1278,6 +1322,7 @@ class MainApp:
             messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
 
     def create_order_from_config(self):
+        """Создает заказ из конфигурации"""
         if not hasattr(self, 'current_config_id') or not self.current_config_id:
             messagebox.showwarning('Внимание!', 'Выберите конфигурацию для заказа')
             return
@@ -1298,6 +1343,7 @@ class MainApp:
         quantity_spin.pack(fill='x', pady=5)
         
         def create_order():
+            """Создание заказа"""
             quantity = quantity_var.get()
             
             try:
@@ -1329,6 +1375,7 @@ class MainApp:
         ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
 
     def delete_configuration(self):
+        """Удаляет конфигурацию"""
         if not hasattr(self, 'current_config_id') or not self.current_config_id:
             messagebox.showwarning('Внимание!', 'Выберите конфигурацию для удаления')
             return
@@ -1358,6 +1405,7 @@ class MainApp:
                 messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
         
     def init_orders_tab(self):
+        """Инициализирует вкладку заказов"""
         main_frame = ttk.Frame(self.tab_orders, style='Surface.TFrame')
         main_frame.pack(fill='both', expand=True)
         
@@ -1441,6 +1489,7 @@ class MainApp:
         self.load_orders()
     
     def pay_selected_order(self):
+        """Обрабатывает оплату выбранного заказа"""
         selected = self.orders_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите заказ для оплаты')
@@ -1630,6 +1679,7 @@ class MainApp:
         button_frame.pack(pady=20)
         
         def process_payment():
+            """Обработка оплаты"""
             if not all([card_number_var.get(), month_var.get(), 
                     year_var.get(), cvc_var.get(), name_var.get()]):
                 messagebox.showerror('Ошибка!', 'Заполните все поля')
@@ -1722,6 +1772,7 @@ class MainApp:
         name_var.trace('w', update_name_display)
             
     def cancel_selected_order(self):
+        """Отменяет выбранный заказ"""
         selected = self.orders_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите заказ для отмены')
@@ -1752,6 +1803,7 @@ class MainApp:
                 messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
 
     def load_orders(self):
+        """Загружает список заказов"""
         try:
             headers = {'token': self.token}
             response = requests.get(f'{self.base_url}/orders/get_user_orders/', headers=headers)
@@ -1789,6 +1841,7 @@ class MainApp:
             messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
 
     def on_order_select(self, event):
+        """Обрабатывает выбор заказа"""
         selected = self.orders_tree.selection()
         if not selected:
             return
@@ -1801,6 +1854,7 @@ class MainApp:
             self.display_order_details(order)
 
     def display_order_details(self, order):
+        """Отображает детали заказа"""
         for item in self.order_details_tree.get_children():
             self.order_details_tree.delete(item)
 
@@ -1827,6 +1881,7 @@ class MainApp:
             ))
         
     def init_profile_tab(self):
+        """Инициализирует вкладку профиля"""
         profile_frame = ttk.Frame(self.tab_profile, style='Surface.TFrame')
         profile_frame.pack(fill='both', expand=True)
         
@@ -1866,6 +1921,7 @@ class MainApp:
                    command=self.logout, style='Secondary.TButton').pack(side='left', padx=10)
         
     def edit_address(self):
+        """Редактирует адрес пользователя"""
         edit_window = tk.Toplevel(self.root)
         edit_window.title('Изменение адреса')
         edit_window.geometry('600x500')
@@ -1920,6 +1976,7 @@ class MainApp:
         ttk.Button(button_frame, text='Отмена', command=edit_window.destroy, style='Secondary.TButton').pack(side='left', padx=10)
     
     def change_password(self):
+        """Изменяет пароль пользователя"""
         password_window = tk.Toplevel(self.root)
         password_window.title('Смена пароля')
         password_window.geometry('600x500')
@@ -2011,6 +2068,7 @@ class MainApp:
         ttk.Button(content_frame, text='Отмена', command=password_window.destroy, style='Secondary.TButton').pack(pady=10)
 
 class AdminApp:
+    """Административная панель управления"""
     def __init__(self, root, token):
         self.root = root
         self.root.title('ANTech - Панель администратора')
@@ -2034,6 +2092,7 @@ class AdminApp:
         self.init_orders_tab()
     
     def setup_styles(self):
+        """Настройка стилей виджетов"""
         style = ttk.Style()
         style.configure('Modern.TFrame', background=self.style.background_color)
         style.configure('Surface.TFrame', background=self.style.surface_color)
@@ -2095,6 +2154,7 @@ class AdminApp:
                        foreground=self.style.text_primary)
     
     def create_header(self):
+        """Создает заголовок административной панели"""
         header_frame = ttk.Frame(self.main_container, style='Surface.TFrame', padding=20)
         header_frame.pack(fill='x', padx=20, pady=10)
         
@@ -2110,6 +2170,7 @@ class AdminApp:
                   command=self.logout, style='Secondary.TButton').pack(side='right')
     
     def create_tabs(self):
+        """Создает вкладки административной панели"""
         tab_control = ttk.Notebook(self.main_container, style='Modern.TNotebook')
         
         self.tab_users = ttk.Frame(tab_control, style='Surface.TFrame', padding=20)
@@ -2127,11 +2188,13 @@ class AdminApp:
         tab_control.pack(fill='both', expand=True, padx=20, pady=10)
     
     def logout(self):
+        """Выполняет выход из системы"""
         for widget in self.root.winfo_children():
             widget.destroy()
         ModernAuthApp(self.root)
     
     def make_api_request(self, endpoint, method='GET', params=None, json_data=None):
+        """Выполняет API запрос к серверу"""
         try:
             headers = {'token': self.token}
             url = f'{self.base_url}{endpoint}'
@@ -2156,6 +2219,7 @@ class AdminApp:
             return None
     
     def init_users_tab(self):
+        """Инициализирует вкладку пользователей"""
         main_frame = ttk.Frame(self.tab_users, style='Surface.TFrame')
         main_frame.pack(fill='both', expand=True)
         
@@ -2209,6 +2273,7 @@ class AdminApp:
         self.load_users()
     
     def search_user(self):
+        """Выполняет поиск пользователя"""
         search_text = self.user_search_var.get().strip()
         
         if not search_text:
@@ -2253,10 +2318,12 @@ class AdminApp:
             messagebox.showerror('Ошибка!', f'Ошибка соединения: {e}')
         
     def is_phone(self, text):
+        """Проверяет, является ли текст телефонным номером"""
         phone_pattern = r'^[\d\s\-\+\(\)]+$'
         return bool(re.match(phone_pattern, text)) and len(text) >= 5
     
     def load_users(self):
+        """Загружает список пользователей"""
         data = self.make_api_request('/users/get_all/')
         if data:
             for item in self.users_tree.get_children():
@@ -2273,6 +2340,7 @@ class AdminApp:
                 ))
     
     def change_user_role(self):
+        """Изменяет роль пользователя"""
         selected = self.users_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите пользователя')
@@ -2318,6 +2386,7 @@ class AdminApp:
         ttk.Button(content_frame, text='Сохранить', command=save_role, style='Primary.TButton').pack(pady=10)
         
     def init_manufactures_tab(self):
+        """Инициализирует вкладку производителей"""
         main_frame = ttk.Frame(self.tab_manufactures, style='Surface.TFrame')
         main_frame.pack(fill='both', expand=True)
         
@@ -2351,6 +2420,7 @@ class AdminApp:
         self.load_manufactures()
     
     def load_manufactures(self):
+        """Загружает список производителей"""
         try:
             data = self.make_api_request('/manufactures/get_manufactures/')
             if data:
@@ -2366,6 +2436,7 @@ class AdminApp:
             messagebox.showerror('Ошибка!', f'Произошла ошибка при загрузке списка производителей: {e}')
       
     def add_manufacture(self):
+        """Добавляет производителя"""
         dialog = tk.Toplevel(self.root)
         dialog.title('Добавление производителя')
         dialog.geometry('300x200')
@@ -2400,6 +2471,7 @@ class AdminApp:
         ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
     
     def delete_manufacture(self):
+        """Удаляет производителя"""
         selected = self.manufactures_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите производителя')
@@ -2417,6 +2489,7 @@ class AdminApp:
                 self.load_manufactures()
     
     def init_components_tab(self):
+        """Инициализирует вкладку компонентов"""
         main_frame = ttk.Frame(self.tab_components, style='Surface.TFrame')
         main_frame.pack(fill='both', expand=True)
         
@@ -2502,6 +2575,7 @@ class AdminApp:
         self.load_components()
     
     def load_components(self):
+        """Загружает список компонентов"""
         data = self.make_api_request('/components/get_all/')
         if data:
             for item in self.components_tree.get_children():
@@ -2521,6 +2595,7 @@ class AdminApp:
             self.admin_display_filtered_components()
     
     def admin_apply_filters(self):
+        """Применяет фильтры к списку компонентов"""
         if not hasattr(self, 'admin_all_components') or not self.admin_all_components:
             return
         
@@ -2558,6 +2633,7 @@ class AdminApp:
         self.admin_display_filtered_components()
 
     def admin_reset_filters(self):
+        """Сбрасывает фильтры компонентов"""
         self.admin_type_filter.set('Все типы')
         self.admin_min_price_filter.set('')
         self.admin_max_price_filter.set('')
@@ -2566,6 +2642,7 @@ class AdminApp:
         self.admin_display_filtered_components()
 
     def admin_display_filtered_components(self):
+        """Отображает отфильтрованные компоненты"""
         for item in self.components_tree.get_children():
             self.components_tree.delete(item)
         
@@ -2580,16 +2657,19 @@ class AdminApp:
             ))
 
     def admin_search_components(self):
+        """Выполняет поиск компонентов"""
         self.admin_apply_filters()
         
         if self.admin_search_var.get().strip():
             messagebox.showinfo('Поиск', f'Найдено компонентов: {len(self.admin_filtered_components)}')
 
     def admin_clear_search(self):
+        """Очищает поисковый запрос"""
         self.admin_search_var.set('')
         self.admin_apply_filters()
     
     def add_component(self):
+        """Добавляет компонент"""
         dialog = tk.Toplevel(self.root)
         dialog.title('Добавление компонента')
         dialog.geometry('400x400')
@@ -2658,6 +2738,7 @@ class AdminApp:
         ttk.Button(button_frame, text='Отмена', command=dialog.destroy, style='Secondary.TButton').pack(side='left', padx=10)
     
     def edit_component(self):
+        """Редактирует компонент"""
         selected = self.components_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите компонент')
@@ -2720,6 +2801,7 @@ class AdminApp:
         spec_text.pack(fill='both', expand=True, padx=5, pady=5)
 
         def load_component_details():
+            """Загрузка данных о компоненте"""
             try:
                 headers = {'token': self.token}
                 response = requests.get(
@@ -2742,6 +2824,7 @@ class AdminApp:
         load_component_details()
 
         def validate_json(data):
+            """Обработка json данных"""
             try:
                 parsed = json.loads(data)
                 if not isinstance(parsed, (dict, list)):
@@ -2751,6 +2834,7 @@ class AdminApp:
                 return False, f"Ошибка JSON: {str(e)}"
 
         def save_component():
+            """Сохранение изменений компонента"""
             name = name_entry.get().strip()
             type_name = type_entry.get().strip()
             manufacture_name = manufacture_entry.get().strip()
@@ -2811,6 +2895,7 @@ class AdminApp:
         help_label.grid(row=7, column=0, columnspan=2, pady=5)
     
     def delete_component(self):
+        """Удаляет компонент"""
         selected = self.components_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите компонент')
@@ -2828,6 +2913,7 @@ class AdminApp:
                 self.load_components()
     
     def init_configurations_tab(self):
+        """Инициализирует вкладку конфигураций"""
         main_frame = ttk.Frame(self.tab_configurations, style='Surface.TFrame')
         main_frame.pack(fill='both', expand=True)
         
@@ -2882,6 +2968,7 @@ class AdminApp:
         self.load_configurations()
 
     def search_configurations(self):
+        """Выполняет поиск конфигураций"""
         search_text = self.config_search_var.get().strip().lower()
         
         if not search_text:
@@ -2898,12 +2985,14 @@ class AdminApp:
         messagebox.showinfo('Поиск', f'Найдено конфигураций: {len(filtered_configs)}')
 
     def load_configurations(self):
+        """Загружает список конфигураций"""
         data = self.make_api_request('/configurations/admin/get_all/')
         if data:
             self.all_configurations = data
             self.display_configurations(data)
             
     def display_configurations(self, configurations):
+        """Отображает список конфигураций"""
         for item in self.configurations_tree.get_children():
             self.configurations_tree.delete(item)
             
@@ -2924,6 +3013,7 @@ class AdminApp:
             ))
     
     def view_configuration(self):
+        """Просматривает детали конфигурации"""
         selected = self.configurations_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите конфигурацию')
@@ -2984,6 +3074,7 @@ class AdminApp:
             ttk.Label(content_frame, text=f'Общая сумма: {total_amount:.2f} руб.', style='Header.TLabel').pack(pady=10)
     
     def delete_configuration(self):
+        """Удаляет конфигурацию"""
         selected = self.configurations_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите конфигурацию')
@@ -3001,6 +3092,7 @@ class AdminApp:
                 self.load_configurations()
     
     def init_orders_tab(self):
+        """Инициализирует вкладку заказов"""
         main_frame = ttk.Frame(self.tab_orders, style='Surface.TFrame')
         main_frame.pack(fill='both', expand=True)
         
@@ -3055,6 +3147,7 @@ class AdminApp:
         self.load_orders()
 
     def search_orders(self):
+        """Выполняет поиск заказов"""
         search_text = self.order_search_var.get().strip().lower()
         
         if not search_text:
@@ -3071,12 +3164,14 @@ class AdminApp:
         messagebox.showinfo('Поиск', f'Найдено заказов: {len(filtered_orders)}')
 
     def load_orders(self):
+        """Загружает список заказов"""
         data = self.make_api_request('/orders/admin/get_all')
         if data:
             self.all_orders = data
             self.display_orders(data)
             
     def display_orders(self, orders):
+        """Отображает список заказов"""
         for item in self.orders_tree.get_children():
             self.orders_tree.delete(item)
             
@@ -3100,6 +3195,7 @@ class AdminApp:
             ))
     
     def change_order_status(self):
+        """Изменяет статус заказа"""
         selected = self.orders_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите заказ')
@@ -3161,6 +3257,7 @@ class AdminApp:
         ttk.Button(content_frame, text='Сохранить', command=save_status, style='Primary.TButton').pack(pady=10)
     
     def delete_order(self):
+        """Удаляет заказ"""
         selected = self.orders_tree.selection()
         if not selected:
             messagebox.showwarning('Внимание!', 'Выберите заказ')
