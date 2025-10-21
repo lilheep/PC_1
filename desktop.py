@@ -5,9 +5,10 @@ import requests
 import os
 import re
 import json
+import pandas as pd
 
-os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
-os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
+# os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
+# os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
 
 class ModernStyle:
     """Стиль оформления приложения с цветовой схемой и параметрами"""
@@ -731,11 +732,16 @@ class MainApp:
         
         button_frame = ttk.Frame(filter_frame, style='Surface.TFrame')
         button_frame.pack(side='left', padx=(20, 0))
+
+        export_frame = ttk.Frame(button_frame, style='Surface.TFrame')
+        export_frame.pack(side='right', padx=(1175, 0))
         
         ttk.Button(button_frame, text='Применить', 
                   command=self.apply_filters, style='Primary.TButton').pack(side='left', padx=(0, 5))
         ttk.Button(button_frame, text='Сбросить', 
                   command=self.reset_filters, style='Secondary.TButton').pack(side='left')
+        ttk.Button(export_frame, text='Экспорт',
+                   command=self.export_catalog, style='Primary.TButton').pack(side='right')
         
         search_frame = ttk.Frame(self.tab_catalog, style='Surface.TFrame')
         search_frame.pack(fill='x', pady=(0, 20))
@@ -764,6 +770,7 @@ class MainApp:
         self.tree.heading('type', text='Тип')
         self.tree.heading('manufacture', text='Производитель')
         self.tree.heading('price', text='Цена')
+
         self.tree.heading('stock', text='Наличие')
         
         self.tree.column('id', width=50)
@@ -888,12 +895,72 @@ class MainApp:
                 component['stock_quantity']
             ))
     
+    def export_catalog(self):
+        """Создает интерфейс для экспорта данных"""
+        self.dialog = tk.Toplevel(self.root)
+        self.dialog.title('Экспорт данных')
+        self.dialog.geometry('400x150')
+        self.dialog.configure(bg=self.style.background_color)
+        self.dialog.resizable(False, False)
+        self.dialog.transient(self.root)
+        self.dialog.grab_set()
+        
+        content_frame = ttk.Frame(self.dialog, style='Surface.TFrame', padding=20)
+        content_frame.pack(fill='both', expand=True)
+
+        input_frame = ttk.Frame(content_frame, style='Surface.TFrame')
+        input_frame.pack(fill='x', pady=(0, 15))
+        
+        ttk.Label(input_frame, text='Введите название файла:', style='Normal.TLabel').pack(side='left', padx=(0, 10))
+        
+        self.filename_entry = ttk.Entry(input_frame, style='Modern.TEntry', font=('Arial', 12))
+        self.filename_entry.pack(fill='x', expand=True, ipady=8)
+
+        button_frame = ttk.Frame(content_frame, style='Surface.TFrame')
+        button_frame.pack(fill='x')
+        
+        export_btn = ttk.Button(
+            button_frame, 
+            text='Экспортировать', 
+            style='Primary.TButton',
+            command=self.perform_export 
+        )
+        export_btn.pack(ipady=8)
+        
+        
+    def perform_export(self):
+        """Выполняет экспорт отфильтрованного каталога компонентов в xlsx формат"""
+        if os.path.exists(f'{self.filename_entry.get()}.xlsx'):
+            messagebox.showwarning('Внимание!', 'Таблица с экспортированными данными уже создана')
+            return
+
+        try:
+            df = pd.DataFrame(self.filtered_components)
+            column_mapping = {
+                "id": "ID",
+                "name": "Название",
+                "type_name": "Тип",
+                "manufacture_name": "Производитель",
+                "price": "Цена",
+                "stock_quantity": "Наличие",
+                "specification": "Характеристики"
+            }
+            df = df.rename(columns=column_mapping)
+            df.to_excel(f'./Экспорт/{self.filename_entry.get()}.xlsx', index=False)
+            messagebox.showinfo('Успех!', f'Каталог компонентов успешно импортирован в файл {self.filename_entry.get()}.xlsx')
+            
+            self.dialog.destroy()
+
+        except Exception as e:
+            messagebox.showerror('Ошибка!', f'Ошибка при экспорте каталога компонентов: {e}')
+        
     def search_components(self):
         """Выполняет поиск компонентов"""
         self.apply_filters()
         
         if self.search_var.get().strip():
             messagebox.showinfo('Поиск', f'Найдено компонентов: {len(self.filtered_components)}')
+
 
     def clear_search(self):
         """Очищает поисковый запрос"""

@@ -6,3 +6,5 @@ cryptography
 dotenv
 bcrypt
 requests
+pandas
+openpyxl
