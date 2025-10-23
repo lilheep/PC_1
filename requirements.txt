@@ -8,3 +8,6 @@ bcrypt
 requests
 pandas
 openpyxl
+docx
+python-docx
+reportlab

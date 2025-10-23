@@ -6,6 +6,16 @@ import os
 import re
 import json
 import pandas as pd
+from docx import Document
+import docx.shared
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import ImageReader
+import datetime
+
 
 # os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
 # os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
@@ -48,7 +58,7 @@ class ModernAuthApp:
         style.configure('Auth.TFrame', background=self.style.surface_color)
         style.configure('Primary.TButton', 
                        background=self.style.primary_color,
-                       foreground='white',
+                       foreground='#1e3d6d',
                        borderwidth=0,
                        focuscolor='none',
                        padding=(20, 10))
@@ -593,7 +603,7 @@ class MainApp:
         style.configure('Primary.TButton', 
                        font=('Arial', 11), 
                        background=self.style.primary_color,
-                       foreground='white',
+                       foreground='#1e3d6d',
                        borderwidth=0,
                        focuscolor='none')
         style.map('Primary.TButton',
@@ -622,7 +632,7 @@ class MainApp:
                        rowheight=25)
         style.configure('Treeview.Heading',
                        background=self.style.primary_color,
-                       foreground='white',
+                       foreground="#1e3d6d",
                        font=('Arial', 10, 'bold'))
         style.map('Treeview.Heading',
                  background=[('active', self.style.secondary_color)])
@@ -732,16 +742,13 @@ class MainApp:
         
         button_frame = ttk.Frame(filter_frame, style='Surface.TFrame')
         button_frame.pack(side='left', padx=(20, 0))
-
-        export_frame = ttk.Frame(button_frame, style='Surface.TFrame')
-        export_frame.pack(side='right', padx=(1175, 0))
         
         ttk.Button(button_frame, text='Применить', 
                   command=self.apply_filters, style='Primary.TButton').pack(side='left', padx=(0, 5))
         ttk.Button(button_frame, text='Сбросить', 
-                  command=self.reset_filters, style='Secondary.TButton').pack(side='left')
-        ttk.Button(export_frame, text='Экспорт',
-                   command=self.export_catalog, style='Primary.TButton').pack(side='right')
+                  command=self.reset_filters, style='Secondary.TButton').pack(side='left', padx=(0, 5))
+        ttk.Button(button_frame, text='Экспорт',
+                   command=self.export_catalog, style='Primary.TButton').pack(side='left')
         
         search_frame = ttk.Frame(self.tab_catalog, style='Surface.TFrame')
         search_frame.pack(fill='x', pady=(0, 20))
@@ -930,10 +937,20 @@ class MainApp:
         
     def perform_export(self):
         """Выполняет экспорт отфильтрованного каталога компонентов в xlsx формат"""
-        if os.path.exists(f'{self.filename_entry.get()}.xlsx'):
+        
+        def check_filename(filename):
+            """Проверка имени файла на содержание запретных символов"""
+            invalid_chars = r'[<>:"/\\|?*]'
+            file = re.sub(invalid_chars, '_', filename.strip())
+            return file
+        
+        os.makedirs('./Экспорт', exist_ok=True)
+        self.safe_filename = check_filename(self.filename_entry.get())
+        file_path = f'./Экспорт/{self.safe_filename}.xlsx'
+        if os.path.exists(file_path):
             messagebox.showwarning('Внимание!', 'Таблица с экспортированными данными уже создана')
             return
-
+        
         try:
             df = pd.DataFrame(self.filtered_components)
             column_mapping = {
@@ -946,8 +963,26 @@ class MainApp:
                 "specification": "Характеристики"
             }
             df = df.rename(columns=column_mapping)
-            df.to_excel(f'./Экспорт/{self.filename_entry.get()}.xlsx', index=False)
-            messagebox.showinfo('Успех!', f'Каталог компонентов успешно импортирован в файл {self.filename_entry.get()}.xlsx')
+
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Компоненты')
+
+                worksheet = writer.sheets['Компоненты']
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) >= max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+
+                    adjusted_width = (max_length + 2) * 1.2
+                    worksheet.column_dimensions[column_letter].width = adjusted_width 
+            
+            messagebox.showinfo('Успех!', f'Каталог компонентов успешно импортирован в файл {self.safe_filename}.xlsx')
             
             self.dialog.destroy()
 
@@ -1096,6 +1131,8 @@ class MainApp:
                 command=self.add_component_to_config, style='Primary.TButton').pack(side='left', padx=5)
         ttk.Button(manage_frame, text='Удалить компонент', 
                 command=self.remove_component_from_config, style='Secondary.TButton').pack(side='left', padx=5)
+        ttk.Button(manage_frame, text='Экспорт',
+                   command=self.export_configuration_to_docx, style='Primary.TButton').pack(side='left', padx=5)
         ttk.Button(manage_frame, text='Создать заказ', 
                 command=self.create_order_from_config, style='Primary.TButton').pack(side='left', padx=5)
 
@@ -1189,6 +1226,99 @@ class MainApp:
         if selected:
             item = selected[0]
             self.selected_component_id = self.config_components_tree.item(item)['tags'][0]
+
+    def export_configuration_to_docx(self):
+        """Экспортирует выбранную конфигурацию в формате DOCX"""
+        if not hasattr(self, 'current_config_id') or not self.current_config_id:
+            messagebox.showwarning('Внимание!', 'Выберите конфигурацию для экспорта')
+            return
+
+        config_data = self.configurations_data.get(self.current_config_id)
+        if not config_data:
+            messagebox.showerror('Ошибка!', 'Не удалось получать данные конфигурации')
+            return
+        
+        try:
+            os.makedirs('./Экспорт', exist_ok=True)
+            config_name = config_data.get('name_config', f'Конфигурация_{self.current_config_id}')
+            safe_filename = re.sub(r'[<>:"/\\|?*]', '_', config_name.strip())
+
+            headers = {'token': self.token}
+            response = requests.get(
+                f'{self.base_url}/configurations/{self.current_config_id}/components/',
+                headers=headers
+            )
+
+            if response.status_code != 200:
+                messagebox.showerror('Ошибка!', 'Не удалось получить компоненты конфигурации')
+                return
+            
+            components = response.json()
+
+            doc = Document()
+
+            title = doc.add_heading(f'Конфигурация: {config_name}', level=1)
+            title.alignment = 1
+
+            created_at = config_data.get('created_at', '')
+            if created_at:
+                try:
+                    created_date = created_at.split("T")[0]
+                    date_para = doc.add_paragraph(f'Дата создания: {created_date}.')
+                    date_para.alignment = 1
+                except:
+                    pass
+
+            doc.add_paragraph()
+
+            table = doc.add_table(rows=1, cols=5)
+            table.style = 'Table Grid'
+
+            header_cells = table.rows[0].cells
+            header_cells[0].text = '№'
+            header_cells[1].text = 'Компоненты'
+            header_cells[2].text = 'Тип'
+            header_cells[3].text = 'Количество'
+            header_cells[4].text = 'Стоимость'
+
+            for cell in header_cells:
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.bold = True
+
+            total_amount = 0
+            for i, component in enumerate(components, 1):
+                row_cells = table.add_row().cells
+                row_cells[0].text = str(i)
+                row_cells[1].text = component.get('component_name')
+                row_cells[2].text = component.get('type_name')
+                row_cells[3].text = str(component.get('quantity'))
+                
+                component_price = component.get('total_price', 0)
+                row_cells[4].text = f'{str(component_price)} руб.'
+
+                total_amount += component_price
+            
+            doc.add_paragraph()
+
+            total_para = doc.add_paragraph()
+            total_para.alignment = 2
+            total_run = total_para.add_run(f'Итоговая стоимость: {str(total_amount)} рублей.')
+            total_run.bold = True
+            total_run.font.size = docx.shared.Pt(14)
+
+            doc.add_paragraph()
+
+            note_para = doc.add_paragraph('Примечание: ')
+            note_para.add_run('Стоимость указана на момент формирования документа и может изменяться.').italic = True
+
+            file_path = f'./Экспорт/{safe_filename}.docx'
+            doc.save(file_path)
+
+            messagebox.showinfo('Успех!', f'Документ с данными о конфигурации успешно сформирован.\nНазвание файла: {safe_filename}.docx')
+        
+        except Exception as e:
+            messagebox.showerror('Ошибка!', f'Ошибка при экспорте конфигурации: {e}')
 
     def create_new_configuration(self):
         """Создает новую конфигурацию"""
@@ -1540,6 +1670,9 @@ class MainApp:
         
         button_frame_right = ttk.Frame(right_frame, style='Surface.TFrame')
         button_frame_right.pack(fill='x', pady=10)
+
+        ttk.Button(button_frame_right, text='Экспорт счета',
+                   command=self.export_order_on_pdf, style='Primary.TButton').pack(side='right', padx=10)
         
         ttk.Button(button_frame_right, text='Оплатить',
                    command=self.pay_selected_order, style='Primary.TButton').pack(side='right', padx=10)
@@ -1555,6 +1688,166 @@ class MainApp:
 
         self.load_orders()
     
+    def amount_to_words(self, amount):
+        """Преобразует сумму в рублях в слова"""
+        try:
+            rub = int(amount)
+            kop = int((amount - rub) * 100)
+            
+            if rub == 0:
+                rub_text = "ноль"
+            else:
+                rub_text = f"{rub}"
+                
+            result = f"{rub_text} руб. {kop:02d} коп."
+            return result
+            
+        except:
+            return f"{amount:.2f} руб."
+
+    def export_order_on_pdf(self):
+        """Экспорт выбранного заказа в формат PDF"""
+        selected = self.orders_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Для осуществления экспорта выберите заказ')
+            return
+        try:
+            item = selected[0]
+            order_id = self.orders_tree.item(item)['values'][0]
+            order_data = self.orders_data.get(order_id)
+
+            if not order_data:
+                messagebox.showerror('Ошибка!', 'Не удалось получить данные выбранного заказа')
+                return
+            
+            os.makedirs('./Экспорт', exist_ok=True)
+            safe_filename = f'Счет_ANTech_#{order_id}'
+            file_path = f'./Экспорт/{safe_filename}.pdf'
+
+            c = canvas.Canvas(file_path, pagesize=A4)
+            width, height = A4
+
+            c.setFont("Helvetica-Bold", 18)
+            c.drawString(50, height-50, "ANTech")
+
+            c.setFont("Helvetica", 10)
+            c.drawString(50, height-65, "Счет на оплату")
+
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(400, height - 50, f"Счет №: {order_id}")
+            order_date = order_data.get('order_date', '')
+            if order_date:
+                try:
+                    formatted_date = order_date.split('T')[0]
+                    c.setFont("Helvetica", 10)
+                    c.drawString(400, height - 65, f"Дата: {formatted_date}")
+                except:
+                    pass
+            
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(50, height - 100, "Покупатель:")
+            c.setFont("Helvetica", 10)
+            
+            y_position = height - 115
+            user_info = [
+                f"ФИО: {self.user_data.get('name', 'Не указано')}",
+                f"Email: {self.user_data.get('email', 'Не указан')}",
+                f"Телефон: {self.user_data.get('phone', 'Не указан')}",
+                f"Адрес: {self.user_data.get('address', 'Не указан')}"
+            ]
+            
+            for info in user_info:
+                c.drawString(50, y_position, info)
+                y_position -= 15
+            
+            
+            y_position -= 20 
+            
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(50, y_position, "№")
+            c.drawString(70, y_position, "Наименование")
+            c.drawString(300, y_position, "Кол-во")
+            c.drawString(350, y_position, "Цена за ед.")
+            c.drawString(450, y_position, "Сумма")
+            
+            c.line(50, y_position - 5, 550, y_position - 5)
+        
+            y_position -= 20
+            total_amount = 0
+            configurations = order_data.get('configurations', [])
+            
+            c.setFont("Helvetica", 9)
+            for i, config in enumerate(configurations, 1):
+                config_name = config.get('configuration_name', 'Конфигурация ПК')
+                quantity = config.get('quantity', 1)
+                price = config.get('price_at_time', 0)
+                total = config.get('total', price * quantity)
+                total_amount += total
+                
+                c.drawString(50, y_position, str(i))
+                if len(config_name) > 40:
+                    config_name = config_name[:37] + "..."
+                c.drawString(70, y_position, config_name)
+                c.drawString(300, y_position, str(quantity))
+                c.drawString(350, y_position, f"{price:.2f} руб.")
+                c.drawString(450, y_position, f"{total:.2f} руб.")
+                
+                y_position -= 15
+                
+                if y_position < 150:
+                    c.showPage()
+                    y_position = height - 50
+                    c.setFont("Helvetica", 9)
+
+            c.line(50, y_position - 5, 550, y_position - 5)
+
+            y_position -= 20
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(350, y_position, f"ИТОГО: {total_amount:.2f} руб.")
+    
+            y_position -= 20
+            c.setFont("Helvetica", 9)
+            amount_words = self.amount_to_words(total_amount)
+            c.drawString(50, y_position, f"Всего к оплате: {amount_words}")
+
+            y_position -= 20
+            status = order_data.get('status_name', 'Неизвестно')
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(50, y_position, f"Статус заказа: {status}")
+
+            y_position -= 50
+
+            c.setFont("Helvetica", 10)
+            c.drawString(50, y_position, "Подпись покупателя: ___________________")
+            c.drawString(50, y_position - 15, "Расшифровка подписи: ___________________")
+
+            c.drawString(350, y_position, "Подпись исполнителя: ___________________")
+            c.drawString(350, y_position - 15, "М.П.")
+
+            y_position -= 50
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(50, y_position, "Контактная информация:")
+            c.setFont("Helvetica", 9)
+            
+            contact_info = [
+                "ANTech",
+                "Email: support@antech.ru",
+                "Телефон: +7 (777) 777-77-77",
+                "Адрес: г. Кострома",
+                f"Документ сформирован: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}"
+            ]
+            
+            for info in contact_info:
+                y_position -= 12
+                c.drawString(50, y_position, info)
+        
+            c.save()
+            
+            messagebox.showinfo('Успех!', f'Счет по заказу #{order_id} успешно экспортирован в PDF\nФайл: {safe_filename}.pdf')
+
+        except Exception as e:
+            messagebox.showerror('Ошибка!', f'Ошибка при экспорте в PDF: {str(e)}')
+
     def pay_selected_order(self):
         """Обрабатывает оплату выбранного заказа"""
         selected = self.orders_tree.selection()
@@ -2178,7 +2471,7 @@ class AdminApp:
         style.configure('Primary.TButton', 
                        font=('Arial', 11), 
                        background=self.style.primary_color,
-                       foreground='white',
+                       foreground='#1e3d6d',
                        borderwidth=0,
                        focuscolor='none')
         style.map('Primary.TButton',
@@ -2207,7 +2500,7 @@ class AdminApp:
                        rowheight=25)
         style.configure('Treeview.Heading',
                        background=self.style.primary_color,
-                       foreground='white',
+                       foreground="#1e3d6d",
                        font=('Arial', 10, 'bold'))
         style.map('Treeview.Heading',
                  background=[('active', self.style.secondary_color)])
