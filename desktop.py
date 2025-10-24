@@ -16,7 +16,6 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import ImageReader
 import datetime
 
-
 # os.environ['TCL_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tcl8.6'
 # os.environ['TK_LIBRARY'] = r'C:\Users\User\AppData\Local\Programs\Python\Python311\tcl\tk8.6'
 
@@ -1711,7 +1710,24 @@ class MainApp:
         if not selected:
             messagebox.showwarning('Внимание!', 'Для осуществления экспорта выберите заказ')
             return
+        
         try:
+            try:
+                pdfmetrics.registerFont(TTFont('Arial', 'C:/Windows/Fonts/arial.ttf'))
+                pdfmetrics.registerFont(TTFont('Arial-Bold', 'C:/Windows/Fonts/arialbd.ttf'))
+                font_normal = 'Arial'
+                font_bold = 'Arial-Bold'
+            except:
+                try:
+                    pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
+                    pdfmetrics.registerFont(TTFont('Arial-Bold', 'arialbd.ttf'))
+                    font_normal = 'Arial'
+                    font_bold = 'Arial-Bold'
+                except:
+                    font_normal = 'Helvetica'
+                    font_bold = 'Helvetica-Bold'
+                    print("Предупреждение: Используются стандартные шрифты без поддержки кириллицы")
+
             item = selected[0]
             order_id = self.orders_tree.item(item)['values'][0]
             order_data = self.orders_data.get(order_id)
@@ -1727,26 +1743,26 @@ class MainApp:
             c = canvas.Canvas(file_path, pagesize=A4)
             width, height = A4
 
-            c.setFont("Helvetica-Bold", 18)
-            c.drawString(50, height-50, "ANTech")
+            c.setFont(font_bold, 18)
+            c.drawString(50, height-50, "ANTech - Конфигуратор ПК")
 
-            c.setFont("Helvetica", 10)
+            c.setFont(font_normal, 10)
             c.drawString(50, height-65, "Счет на оплату")
 
-            c.setFont("Helvetica-Bold", 12)
+            c.setFont(font_bold, 12)
             c.drawString(400, height - 50, f"Счет №: {order_id}")
             order_date = order_data.get('order_date', '')
             if order_date:
                 try:
                     formatted_date = order_date.split('T')[0]
-                    c.setFont("Helvetica", 10)
+                    c.setFont(font_normal, 10)
                     c.drawString(400, height - 65, f"Дата: {formatted_date}")
                 except:
                     pass
             
-            c.setFont("Helvetica-Bold", 12)
+            c.setFont(font_bold, 12)
             c.drawString(50, height - 100, "Покупатель:")
-            c.setFont("Helvetica", 10)
+            c.setFont(font_normal, 10)
             
             y_position = height - 115
             user_info = [
@@ -1760,10 +1776,9 @@ class MainApp:
                 c.drawString(50, y_position, info)
                 y_position -= 15
             
-            
             y_position -= 20 
             
-            c.setFont("Helvetica-Bold", 10)
+            c.setFont(font_bold, 10)
             c.drawString(50, y_position, "№")
             c.drawString(70, y_position, "Наименование")
             c.drawString(300, y_position, "Кол-во")
@@ -1776,7 +1791,7 @@ class MainApp:
             total_amount = 0
             configurations = order_data.get('configurations', [])
             
-            c.setFont("Helvetica", 9)
+            c.setFont(font_normal, 9)
             for i, config in enumerate(configurations, 1):
                 config_name = config.get('configuration_name', 'Конфигурация ПК')
                 quantity = config.get('quantity', 1)
@@ -1797,27 +1812,27 @@ class MainApp:
                 if y_position < 150:
                     c.showPage()
                     y_position = height - 50
-                    c.setFont("Helvetica", 9)
+                    c.setFont(font_normal, 9)
 
             c.line(50, y_position - 5, 550, y_position - 5)
 
             y_position -= 20
-            c.setFont("Helvetica-Bold", 12)
+            c.setFont(font_bold, 12)
             c.drawString(350, y_position, f"ИТОГО: {total_amount:.2f} руб.")
-    
+
             y_position -= 20
-            c.setFont("Helvetica", 9)
+            c.setFont(font_normal, 9)
             amount_words = self.amount_to_words(total_amount)
             c.drawString(50, y_position, f"Всего к оплате: {amount_words}")
 
             y_position -= 20
             status = order_data.get('status_name', 'Неизвестно')
-            c.setFont("Helvetica-Bold", 10)
+            c.setFont(font_bold, 10)
             c.drawString(50, y_position, f"Статус заказа: {status}")
 
             y_position -= 50
 
-            c.setFont("Helvetica", 10)
+            c.setFont(font_normal, 10)
             c.drawString(50, y_position, "Подпись покупателя: ___________________")
             c.drawString(50, y_position - 15, "Расшифровка подписи: ___________________")
 
@@ -1825,14 +1840,14 @@ class MainApp:
             c.drawString(350, y_position - 15, "М.П.")
 
             y_position -= 50
-            c.setFont("Helvetica-Bold", 10)
+            c.setFont(font_bold, 10)
             c.drawString(50, y_position, "Контактная информация:")
-            c.setFont("Helvetica", 9)
+            c.setFont(font_normal, 9)
             
             contact_info = [
-                "ANTech",
+                "ANTech - Конфигуратор ПК",
                 "Email: support@antech.ru",
-                "Телефон: +7 (777) 777-77-77",
+                "Телефон: +7 (777) 777-77-77", 
                 "Адрес: г. Кострома",
                 f"Документ сформирован: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}"
             ]
