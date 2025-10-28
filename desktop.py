@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from tkinter.font import Font
+from tkinter import filedialog
 import requests
 import os
 import re
@@ -903,53 +904,28 @@ class MainApp:
     
     def export_catalog(self):
         """Создает интерфейс для экспорта данных"""
-        self.dialog = tk.Toplevel(self.root)
-        self.dialog.title('Экспорт данных')
-        self.dialog.geometry('400x150')
-        self.dialog.configure(bg=self.style.background_color)
-        self.dialog.resizable(False, False)
-        self.dialog.transient(self.root)
-        self.dialog.grab_set()
-        
-        content_frame = ttk.Frame(self.dialog, style='Surface.TFrame', padding=20)
-        content_frame.pack(fill='both', expand=True)
+        try:
+            default_name = "Каталог_компонентов.xlsx"
+            filepath = filedialog.asksaveasfilename(
+                defaultextension='.xlsx',
+                filetypes=[
+                    ("Excel files", ".xlsx"),
+                    ("All files","*.*")
+                ],
+                initialfile=default_name,
+                title='Сохранить каталог компонентов как...'
+            )
 
-        input_frame = ttk.Frame(content_frame, style='Surface.TFrame')
-        input_frame.pack(fill='x', pady=(0, 15))
-        
-        ttk.Label(input_frame, text='Введите название файла:', style='Normal.TLabel').pack(side='left', padx=(0, 10))
-        
-        self.filename_entry = ttk.Entry(input_frame, style='Modern.TEntry', font=('Arial', 12))
-        self.filename_entry.pack(fill='x', expand=True, ipady=8)
-
-        button_frame = ttk.Frame(content_frame, style='Surface.TFrame')
-        button_frame.pack(fill='x')
-        
-        export_btn = ttk.Button(
-            button_frame, 
-            text='Экспортировать', 
-            style='Primary.TButton',
-            command=self.perform_export 
-        )
-        export_btn.pack(ipady=8)
+            if not filepath:
+                return
+            
+            self.perform_export(filepath)
+        except Exception as e:
+            messagebox.showerror('Ошибка!', f'Произошла ошибка при экспорте каталога компонентов: {e}')
         
         
-    def perform_export(self):
-        """Выполняет экспорт отфильтрованного каталога компонентов в xlsx формат"""
-        
-        def check_filename(filename):
-            """Проверка имени файла на содержание запретных символов"""
-            invalid_chars = r'[<>:"/\\|?*]'
-            file = re.sub(invalid_chars, '_', filename.strip())
-            return file
-        
-        os.makedirs('./Экспорт', exist_ok=True)
-        self.safe_filename = check_filename(self.filename_entry.get())
-        file_path = f'./Экспорт/{self.safe_filename}.xlsx'
-        if os.path.exists(file_path):
-            messagebox.showwarning('Внимание!', 'Таблица с экспортированными данными уже создана')
-            return
-        
+    def perform_export(self, file_path):
+        """Выполняет экспорт отфильтрованного каталога компонентов в xlsx формат"""     
         try:
             df = pd.DataFrame(self.filtered_components)
             column_mapping = {
@@ -981,9 +957,9 @@ class MainApp:
                     adjusted_width = (max_length + 2) * 1.2
                     worksheet.column_dimensions[column_letter].width = adjusted_width 
             
-            messagebox.showinfo('Успех!', f'Каталог компонентов успешно импортирован в файл {self.safe_filename}.xlsx')
-            
-            self.dialog.destroy()
+            messagebox.showinfo('Успех!',
+                                'Каталог компонентов успешно экспортирован!\n\n' +
+                                f'Файл сохранен по пути: {file_path}')
 
         except Exception as e:
             messagebox.showerror('Ошибка!', f'Ошибка при экспорте каталога компонентов: {e}')
@@ -1238,10 +1214,6 @@ class MainApp:
             return
         
         try:
-            os.makedirs('./Экспорт', exist_ok=True)
-            config_name = config_data.get('name_config', f'Конфигурация_{self.current_config_id}')
-            safe_filename = re.sub(r'[<>:"/\\|?*]', '_', config_name.strip())
-
             headers = {'token': self.token}
             response = requests.get(
                 f'{self.base_url}/configurations/{self.current_config_id}/components/',
@@ -1256,7 +1228,7 @@ class MainApp:
 
             doc = Document()
 
-            title = doc.add_heading(f'Конфигурация: {config_name}', level=1)
+            title = doc.add_heading(f'Конфигурация: {config_data['name_config']}', level=1)
             title.alignment = 1
 
             created_at = config_data.get('created_at', '')
@@ -1311,10 +1283,24 @@ class MainApp:
             note_para = doc.add_paragraph('Примечание: ')
             note_para.add_run('Стоимость указана на момент формирования документа и может изменяться.').italic = True
 
-            file_path = f'./Экспорт/{safe_filename}.docx'
+            default_filename = "Конфигурация.docx"
+
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".docx",
+                filetypes=[
+                    ("Docx files", "*.docx"),
+                    ("All files", "*.*")
+                ],
+                initialfile=default_filename,
+                title='Сохранить конфигурацию как...'
+            )
+
+            if not file_path:
+                return
+
             doc.save(file_path)
 
-            messagebox.showinfo('Успех!', f'Документ с данными о конфигурации успешно сформирован.\nНазвание файла: {safe_filename}.docx')
+            messagebox.showinfo('Успех!', f'Документ с данными о конфигурации успешно сформирован.\nПуть к файлу: {file_path}')
         
         except Exception as e:
             messagebox.showerror('Ошибка!', f'Ошибка при экспорте конфигурации: {e}')
@@ -1735,10 +1721,18 @@ class MainApp:
             if not order_data:
                 messagebox.showerror('Ошибка!', 'Не удалось получить данные выбранного заказа')
                 return
+
+            default_filename = "Счет_на_оплату_заказа_ANTech.pdf"
             
-            os.makedirs('./Экспорт', exist_ok=True)
-            safe_filename = f'Счет_ANTech_#{order_id}'
-            file_path = f'./Экспорт/{safe_filename}.pdf'
+            file_path = filedialog.asksaveasfilename(
+                defaultextension='.pdf',
+                filetypes=[
+                    ("PDF files", "*.pdf"),
+                    ("All files", "*.*")
+                ],
+                initialfile=default_filename,
+                title='Сохранить счет на оплату как...'
+            )
 
             c = canvas.Canvas(file_path, pagesize=A4)
             width, height = A4
@@ -1845,7 +1839,7 @@ class MainApp:
             c.setFont(font_normal, 9)
             
             contact_info = [
-                "ANTech - Конфигуратор ПК",
+                "ANTech",
                 "Email: support@antech.ru",
                 "Телефон: +7 (777) 777-77-77", 
                 "Адрес: г. Кострома",
@@ -1858,7 +1852,7 @@ class MainApp:
         
             c.save()
             
-            messagebox.showinfo('Успех!', f'Счет по заказу #{order_id} успешно экспортирован в PDF\nФайл: {safe_filename}.pdf')
+            messagebox.showinfo('Успех!', f'Счет по заказу #{order_id} успешно экспортирован в PDF\nПуть к файлу: {file_path}')
 
         except Exception as e:
             messagebox.showerror('Ошибка!', f'Ошибка при экспорте в PDF: {str(e)}')
