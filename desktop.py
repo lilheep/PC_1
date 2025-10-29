@@ -1855,7 +1855,8 @@ class MainApp:
             messagebox.showinfo('Успех!', f'Счет по заказу #{order_id} успешно экспортирован в PDF\nПуть к файлу: {file_path}')
 
         except Exception as e:
-            messagebox.showerror('Ошибка!', f'Ошибка при экспорте в PDF: {str(e)}')
+            messagebox.showerror('Ошибка!', f'Ошибка при экспорте в PDF: {e
+            }')
 
     def pay_selected_order(self):
         """Обрабатывает оплату выбранного заказа"""
@@ -2942,7 +2943,7 @@ class AdminApp:
         self.admin_available_types = set()
         
         self.load_components()
-    
+
     def load_components(self):
         """Загружает список компонентов"""
         data = self.make_api_request('/components/get_all/')
