@@ -558,7 +558,7 @@ class MainApp:
     """Основное приложение после авторизации"""
     def __init__(self, root, token):
         self.root = root
-        self.root.title('ANTech - Конфигуратор ПК')
+        self.root.title('ANTech')
         self.root.state('zoomed')
         self.style = ModernStyle()
         self.setup_styles()
@@ -723,6 +723,16 @@ class MainApp:
                                       state='readonly', width=15, style='Modern.TCombobox')
         self.type_combo.pack(pady=(5, 0))
         
+        sort_frame = ttk.Frame(filter_frame, style='Surface.TFrame')
+        sort_frame.pack(side='left', padx=(0, 15))
+        ttk.Label(sort_frame, text='Сортировка:', style='Secondary.TLabel').pack(anchor='w')
+        self.sort_filter = tk.StringVar(value="Без сортировки")
+        sort_combo = ttk.Combobox(sort_frame, textvariable=self.sort_filter, 
+                                 state='readonly', width=15, style='Modern.TCombobox')
+        sort_combo['values'] = ("Без сортировки", "Цена по возрастанию", "Цена по убыванию")
+        sort_combo.pack(pady=(5, 0))
+        sort_combo.bind('<<ComboboxSelected>>', lambda e: self.apply_filters())
+        
         price_frame = ttk.Frame(filter_frame, style='Surface.TFrame')
         price_frame.pack(side='left', padx=(0, 15))
         ttk.Label(price_frame, text='Цена:', style='Secondary.TLabel').pack(anchor='w')
@@ -874,6 +884,12 @@ class MainApp:
                 search_term in comp['type_name'].lower() or 
                 search_term in comp['manufacture_name'].lower()
             )]
+        
+        sort_option = self.sort_filter.get()
+        if sort_option == "Цена по возрастанию":
+            filtered.sort(key=lambda x: x.get('price', 0))
+        elif sort_option == "Цена по убыванию":
+            filtered.sort(key=lambda x: x.get('price', 0), reverse=True)
         
         self.filtered_components = filtered
         self.display_filtered_components()
@@ -1598,6 +1614,16 @@ class MainApp:
         
         ttk.Button(button_frame, text='Обновить', 
                 command=self.load_orders, style='Secondary.TButton').pack(side='left')
+        
+        sort_frame = ttk.Frame(button_frame, style='Surface.TFrame')
+        sort_frame.pack(side='right')
+        ttk.Label(sort_frame, text='Сортировка:', style='Secondary.TLabel').pack(side='left', padx=5)
+        self.orders_sort_filter = tk.StringVar(value="Сначала новые")
+        orders_sort_combo = ttk.Combobox(sort_frame, textvariable=self.orders_sort_filter, 
+                                    state='readonly', width=15, style='Modern.TCombobox')
+        orders_sort_combo['values'] = ("Сначала новые", "Сначала старые")
+        orders_sort_combo.pack(side='left', padx=5)
+        orders_sort_combo.bind('<<ComboboxSelected>>', lambda e: self.apply_orders_sort())
 
         paned_window = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
         paned_window.pack(fill='both', expand=True, pady=10)
@@ -1673,6 +1699,50 @@ class MainApp:
 
         self.load_orders()
     
+    def apply_orders_sort(self):
+        """Применяет сортировку к заказам"""
+        if not hasattr(self, 'orders_data'):
+            return
+        
+        sort_option = self.orders_sort_filter.get()
+
+        for order_id, order_data in self.orders_data.items():
+            order_date = order_data.get('order_date', '')
+            if order_date:
+                try:
+                    if 'T' in order_date:
+                        dt = datetime.datetime.fromisoformat(order_date.replace('Z', '+00:00'))
+                    else:
+                        dt = datetime.datetime.strptime(order_date, '%Y-%m-%d')
+                    order_data['_sort_date'] = dt
+                except:
+                    order_data['_sort_date'] = datetime.datetime.min
+
+        sorted_orders = sorted(self.orders_data.values(), 
+                            key=lambda x: x.get('_sort_date', datetime.datetime.min), 
+                            reverse=(sort_option == "Сначала новые"))
+
+        for item in self.orders_tree.get_children():
+            self.orders_tree.delete(item)
+        
+        for order in sorted_orders:
+            order_date = order.get('order_date', '')
+            if order_date:
+                try:
+                    order_date = order_date.split('T')[0]
+                except:
+                    pass
+
+            total_amount = order.get('total_amount', 0)
+            total_text = f"{total_amount:.2f} руб." if total_amount else "0 руб."
+            
+            self.orders_tree.insert('', 'end', values=(
+                order['id'],
+                order_date,
+                total_text,
+                order.get('status_name', 'Неизвестно')
+            ))
+    
     def amount_to_words(self, amount):
         """Преобразует сумму в рублях в слова"""
         try:
@@ -1738,7 +1808,7 @@ class MainApp:
             width, height = A4
 
             c.setFont(font_bold, 18)
-            c.drawString(50, height-50, "ANTech - Конфигуратор ПК")
+            c.drawString(50, height-50, "ANTech")
 
             c.setFont(font_normal, 10)
             c.drawString(50, height-65, "Счет на оплату")
@@ -2205,6 +2275,7 @@ class MainApp:
                         total_text,
                         order.get('status_name', 'Неизвестно')
                     ))
+                self.apply_orders_sort()
             else:
                 messagebox.showerror('Ошибка!', 'Не удалось загрузить заказы')
         except requests.exceptions.RequestException as e:
@@ -2872,6 +2943,14 @@ class AdminApp:
         self.admin_type_filter = tk.StringVar()
         self.admin_type_combo = ttk.Combobox(filter_frame, textvariable=self.admin_type_filter, state='readonly', width=15, style='Modern.TCombobox')
         self.admin_type_combo.pack(side='left', padx=5)
+        
+        ttk.Label(filter_frame, text='Сортировка:', style='Normal.TLabel').pack(side='left', padx=5)
+        self.admin_sort_filter = tk.StringVar(value="Без сортировки")
+        admin_sort_combo = ttk.Combobox(filter_frame, textvariable=self.admin_sort_filter, 
+                                      state='readonly', width=15, style='Modern.TCombobox')
+        admin_sort_combo['values'] = ("Без сортировки", "Цена по возрастанию", "Цена по убыванию")
+        admin_sort_combo.pack(side='left', padx=5)
+        admin_sort_combo.bind('<<ComboboxSelected>>', lambda e: self.admin_apply_filters())
 
         ttk.Label(filter_frame, text='Цена от:', style='Normal.TLabel').pack(side='left', padx=5)
         self.admin_min_price_filter = tk.StringVar()
@@ -2912,6 +2991,8 @@ class AdminApp:
                   command=self.edit_component, style='Secondary.TButton').pack(side='left', padx=5)
         ttk.Button(button_frame, text='Удалить', 
                   command=self.delete_component, style='Secondary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Экспорт', 
+                  command=self.export_components, style='Primary.TButton').pack(side='left', padx=5)
 
         columns = ('id', 'name', 'type', 'manufacture', 'price', 'stock')
         self.components_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
@@ -2964,6 +3045,326 @@ class AdminApp:
 
             self.admin_display_filtered_components()
     
+    def export_components(self):
+        """Экспорт компонентов в Excel"""
+        try:
+            default_name = "Компоненты_ANTech.xlsx"
+            filepath = filedialog.asksaveasfilename(
+                defaultextension='.xlsx',
+                filetypes=[
+                    ("Excel files", ".xlsx"),
+                    ("All files", "*.*")
+                ],
+                initialfile=default_name,
+                title='Сохранить компоненты как...'
+            )
+
+            if not filepath:
+                return
+            
+            self.perform_components_export(filepath)
+        except Exception as e:
+            messagebox.showerror('Ошибка!', f'Произошла ошибка при экспорте компонентов: {e}')
+    
+    def perform_components_export(self, file_path):
+        """Выполняет экспорт компонентов в xlsx формат"""
+        try:
+            df = pd.DataFrame(self.admin_filtered_components)
+            column_mapping = {
+                "id": "ID",
+                "name": "Название",
+                "type_name": "Тип",
+                "manufacture_name": "Производитель",
+                "price": "Цена",
+                "stock_quantity": "Наличие",
+                "specification": "Характеристики"
+            }
+            df = df.rename(columns=column_mapping)
+
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Компоненты')
+
+                worksheet = writer.sheets['Компоненты']
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) >= max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+
+                    adjusted_width = (max_length + 2) * 1.2
+                    worksheet.column_dimensions[column_letter].width = adjusted_width 
+            
+            messagebox.showinfo('Успех!',
+                                'Компоненты успешно экспортированы!\n\n' +
+                                f'Файл сохранен по пути: {file_path}')
+
+        except Exception as e:
+            messagebox.showerror('Ошибка!', f'Ошибка при экспорте компонентов: {e}')
+
+    def export_configuration(self):
+        """Экспорт конфигурации в DOCX"""
+        selected = self.configurations_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите конфигурацию для экспорта')
+            return
+
+        config_id = self.configurations_tree.item(selected[0])['values'][0]
+        
+        try:
+            data = self.make_api_request(f'/configurations/admin/{config_id}/components/')
+            if not data:
+                return
+
+            config_data = None
+            for config in self.all_configurations:
+                if config['id'] == config_id:
+                    config_data = config
+                    break
+
+            if not config_data:
+                messagebox.showerror('Ошибка!', 'Не удалось получить данные конфигурации')
+                return
+
+            doc = Document()
+
+            title = doc.add_heading(f'Конфигурация: {config_data["name_config"]}', level=1)
+            title.alignment = 1
+
+            created_at = config_data.get('created_at', '')
+            if created_at:
+                try:
+                    created_date = created_at.split("T")[0]
+                    date_para = doc.add_paragraph(f'Дата создания: {created_date}')
+                    date_para.alignment = 1
+                except:
+                    pass
+
+            user_info = doc.add_paragraph(f'Пользователь: {config_data["user_name"]}')
+            user_info.alignment = 1
+
+            doc.add_paragraph()
+
+            table = doc.add_table(rows=1, cols=5)
+            table.style = 'Table Grid'
+
+            header_cells = table.rows[0].cells
+            header_cells[0].text = '№'
+            header_cells[1].text = 'Компонент'
+            header_cells[2].text = 'Тип'
+            header_cells[3].text = 'Количество'
+            header_cells[4].text = 'Стоимость'
+
+            for cell in header_cells:
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.bold = True
+
+            total_amount = 0
+            for i, component in enumerate(data, 1):
+                row_cells = table.add_row().cells
+                row_cells[0].text = str(i)
+                row_cells[1].text = component.get('component_name', '')
+                row_cells[2].text = component.get('type_name', '')
+                row_cells[3].text = str(component.get('quantity', 0))
+                
+                component_price = component.get('total_price', 0)
+                row_cells[4].text = f'{component_price:.2f} руб.'
+
+                total_amount += component_price
+            
+            doc.add_paragraph()
+
+            total_para = doc.add_paragraph()
+            total_para.alignment = 2
+            total_run = total_para.add_run(f'Итоговая стоимость: {total_amount:.2f} рублей.')
+            total_run.bold = True
+            total_run.font.size = docx.shared.Pt(14)
+
+            default_filename = f"Конфигурация_{config_data['name_config']}.docx"
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".docx",
+                filetypes=[("Docx files", "*.docx"), ("All files", "*.*")],
+                initialfile=default_filename,
+                title='Сохранить конфигурацию как...'
+            )
+
+            if not file_path:
+                return
+
+            doc.save(file_path)
+            messagebox.showinfo('Успех!', f'Конфигурация успешно экспортирована!\nПуть: {file_path}')
+
+        except Exception as e:
+            messagebox.showerror('Ошибка!', f'Ошибка при экспорте конфигурации: {e}')
+
+    def export_order(self):
+        """Экспорт заказа в PDF"""
+        selected = self.orders_tree.selection()
+        if not selected:
+            messagebox.showwarning('Внимание!', 'Выберите заказ для экспорта')
+            return
+
+        order_id = self.orders_tree.item(selected[0])['values'][0]
+        
+        try:
+            order_data = None
+            for order in self.all_orders:
+                if order['id'] == order_id:
+                    order_data = order
+                    break
+
+            if not order_data:
+                messagebox.showerror('Ошибка!', 'Не удалось получить данные заказа')
+                return
+
+            user_response = self.make_api_request(f'/users/get_user_by_email_or_phone/', 
+                                                method='POST', 
+                                                json_data={'email': order_data['user_login']})
+            if not user_response:
+                return
+
+            try:
+                pdfmetrics.registerFont(TTFont('Arial', 'C:/Windows/Fonts/arial.ttf'))
+                pdfmetrics.registerFont(TTFont('Arial-Bold', 'C:/Windows/Fonts/arialbd.ttf'))
+                font_normal = 'Arial'
+                font_bold = 'Arial-Bold'
+            except:
+                font_normal = 'Helvetica'
+                font_bold = 'Helvetica-Bold'
+
+            default_filename = f"Счет_заказ_{order_id}.pdf"
+            file_path = filedialog.asksaveasfilename(
+                defaultextension='.pdf',
+                filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
+                initialfile=default_filename,
+                title='Сохранить счет как...'
+            )
+
+            if not file_path:
+                return
+
+            c = canvas.Canvas(file_path, pagesize=A4)
+            width, height = A4
+
+            c.setFont(font_bold, 18)
+            c.drawString(50, height-50, "ANTech")
+            c.setFont(font_normal, 10)
+            c.drawString(50, height-65, "Счет на оплату")
+
+            c.setFont(font_bold, 12)
+            c.drawString(400, height - 50, f"Счет №: {order_id}")
+            order_date = order_data.get('order_date', '')
+            if order_date:
+                try:
+                    formatted_date = order_date.split('T')[0]
+                    c.setFont(font_normal, 10)
+                    c.drawString(400, height - 65, f"Дата: {formatted_date}")
+                except:
+                    pass
+
+            c.setFont(font_bold, 12)
+            c.drawString(50, height - 100, "Покупатель:")
+            c.setFont(font_normal, 10)
+            
+            y_position = height - 115
+            user_info = [
+                f"ФИО: {user_response.get('name', 'Не указано')}",
+                f"Email: {user_response.get('email', 'Не указан')}",
+                f"Телефон: {user_response.get('phone', 'Не указан')}",
+                f"Адрес: {user_response.get('address', 'Не указан')}"
+            ]
+            
+            for info in user_info:
+                c.drawString(50, y_position, info)
+                y_position -= 15
+            
+            y_position -= 20
+
+            c.setFont(font_bold, 10)
+            c.drawString(50, y_position, "№")
+            c.drawString(70, y_position, "Наименование")
+            c.drawString(300, y_position, "Кол-во")
+            c.drawString(350, y_position, "Цена за ед.")
+            c.drawString(450, y_position, "Сумма")
+            
+            c.line(50, y_position - 5, 550, y_position - 5)
+        
+            y_position -= 20
+            total_amount = 0
+            configurations = order_data.get('configurations', [])
+            
+            c.setFont(font_normal, 9)
+            for i, config in enumerate(configurations, 1):
+                config_name = config.get('configuration_name', 'Конфигурация ПК')
+                quantity = config.get('quantity', 1)
+                price = config.get('price_at_time', 0)
+                total = config.get('total', price * quantity)
+                total_amount += total
+                
+                c.drawString(50, y_position, str(i))
+                if len(config_name) > 40:
+                    config_name = config_name[:37] + "..."
+                c.drawString(70, y_position, config_name)
+                c.drawString(300, y_position, str(quantity))
+                c.drawString(350, y_position, f"{price:.2f} руб.")
+                c.drawString(450, y_position, f"{total:.2f} руб.")
+                
+                y_position -= 15
+                
+                if y_position < 150:
+                    c.showPage()
+                    y_position = height - 50
+                    c.setFont(font_normal, 9)
+
+            c.line(50, y_position - 5, 550, y_position - 5)
+
+            # Итог
+            y_position -= 20
+            c.setFont(font_bold, 12)
+            c.drawString(350, y_position, f"ИТОГО: {total_amount:.2f} руб.")
+
+            # Статус заказа
+            y_position -= 20
+            status = order_data.get('status_name', 'Неизвестно')
+            c.setFont(font_bold, 10)
+            c.drawString(50, y_position, f"Статус заказа: {status}")
+
+            # Подписи
+            y_position -= 50
+            c.setFont(font_normal, 10)
+            c.drawString(50, y_position, "Подпись покупателя: ___________________")
+            c.drawString(350, y_position, "Подпись исполнителя: ___________________")
+
+            # Контактная информация
+            y_position -= 50
+            c.setFont(font_bold, 10)
+            c.drawString(50, y_position, "Контактная информация:")
+            c.setFont(font_normal, 9)
+            
+            contact_info = [
+                "ANTech",
+                "Email: support@antech.ru",
+                "Телефон: +7 (777) 777-77-77", 
+                "Адрес: г. Кострома",
+                f"Документ сформирован: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}"
+            ]
+            
+            for info in contact_info:
+                y_position -= 12
+                c.drawString(50, y_position, info)
+        
+            c.save()
+            
+            messagebox.showinfo('Успех!', f'Счет по заказу #{order_id} успешно экспортирован!\nПуть: {file_path}')
+
+        except Exception as e:
+            messagebox.showerror('Ошибка!', f'Ошибка при экспорте в PDF: {e}')
+    
     def admin_apply_filters(self):
         """Применяет фильтры к списку компонентов"""
         if not hasattr(self, 'admin_all_components') or not self.admin_all_components:
@@ -2998,6 +3399,12 @@ class AdminApp:
                 search_term in comp['type_name'].lower() or 
                 search_term in comp['manufacture_name'].lower()
             )]
+        
+        sort_option = self.admin_sort_filter.get()
+        if sort_option == "Цена по возрастанию":
+            filtered.sort(key=lambda x: x.get('price', 0))
+        elif sort_option == "Цена по убыванию":
+            filtered.sort(key=lambda x: x.get('price', 0), reverse=True)
         
         self.admin_filtered_components = filtered
         self.admin_display_filtered_components()
@@ -3310,6 +3717,8 @@ class AdminApp:
                   command=self.view_configuration, style='Primary.TButton').pack(side='left', padx=5)
         ttk.Button(button_frame, text='Удалить', 
                   command=self.delete_configuration, style='Secondary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Экспорт', 
+                  command=self.export_configuration, style='Primary.TButton').pack(side='left', padx=5)
 
         columns = ('id', 'user', 'name', 'description', 'created')
         self.configurations_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
@@ -3481,6 +3890,16 @@ class AdminApp:
                   command=self.search_orders, style='Primary.TButton').pack(side='left', padx=5)
         ttk.Button(search_frame, text='Обновить', 
                   command=self.load_orders, style='Secondary.TButton').pack(side='left', padx=5)
+        
+        sort_frame = ttk.Frame(search_frame, style='Surface.TFrame')
+        sort_frame.pack(side='right')
+        ttk.Label(sort_frame, text='Сортировка:', style='Normal.TLabel').pack(side='left', padx=5)
+        self.admin_orders_sort_filter = tk.StringVar(value="Сначала новые")
+        admin_orders_sort_combo = ttk.Combobox(sort_frame, textvariable=self.admin_orders_sort_filter, 
+                                            state='readonly', width=15, style='Modern.TCombobox')
+        admin_orders_sort_combo['values'] = ("Сначала новые", "Сначала старые")
+        admin_orders_sort_combo.pack(side='left', padx=5)
+        admin_orders_sort_combo.bind('<<ComboboxSelected>>', lambda e: self.apply_admin_orders_sort())
 
         button_frame = ttk.Frame(main_frame, style='Surface.TFrame')
         button_frame.pack(fill='x', pady=(0, 20))
@@ -3489,6 +3908,8 @@ class AdminApp:
                   command=self.change_order_status, style='Primary.TButton').pack(side='left', padx=5)
         ttk.Button(button_frame, text='Удалить', 
                   command=self.delete_order, style='Secondary.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text='Экспорт', 
+                  command=self.export_order, style='Primary.TButton').pack(side='left', padx=5)
 
         columns = ('id', 'user', 'date', 'total', 'status')
         self.orders_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
@@ -3533,12 +3954,37 @@ class AdminApp:
         
         messagebox.showinfo('Поиск', f'Найдено заказов: {len(filtered_orders)}')
 
+    def apply_admin_orders_sort(self):
+        """Применяет сортировку к заказам администратора"""
+        if not hasattr(self, 'all_orders'):
+            return
+        
+        sort_option = self.admin_orders_sort_filter.get()
+ 
+        for order in self.all_orders:
+            order_date = order.get('order_date', '')
+            if order_date:
+                try:
+                    if 'T' in order_date:
+                        dt = datetime.datetime.fromisoformat(order_date.replace('Z', '+00:00'))
+                    else:
+                        dt = datetime.datetime.strptime(order_date, '%Y-%m-%d')
+                    order['_sort_date'] = dt
+                except:
+                    order['_sort_date'] = datetime.datetime.min
+
+        sorted_orders = sorted(self.all_orders, 
+                            key=lambda x: x.get('_sort_date', datetime.datetime.min), 
+                            reverse=(sort_option == "Сначала новые"))
+
+        self.display_orders(sorted_orders)
+    
     def load_orders(self):
         """Загружает список заказов"""
         data = self.make_api_request('/orders/admin/get_all')
         if data:
             self.all_orders = data
-            self.display_orders(data)
+            self.apply_admin_orders_sort()
             
     def display_orders(self, orders):
         """Отображает список заказов"""
